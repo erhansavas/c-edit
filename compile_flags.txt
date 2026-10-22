@@ -1,0 +1,9 @@
+-std=c++23
+-Wall
+-Wextra
+-Wpedantic
+-Wshadow
+-Wconversion
+-fno-exceptions
+-fno-rtti
+-Isrc
