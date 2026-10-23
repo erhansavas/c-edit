@@ -3,7 +3,7 @@
 ## 0.2 — 23 Ekim 2026
 
 - Program çıktısı ayrı pencere yerine kodun altındaki panelde; derleme mesajları paneli içeriğine göre boyutlanır.
-- ⌘1…⌘9 sekme seçer; ⌘⇧T kapatılan sekmeyi yeniden açar.
+- ⌘1…⌘8 sekme seçer, ⌘9 son sekmeye gider; ⌘⇧T kapatılan sekmeyi yeniden açar.
 - Durum çubuğunda yalnızca sütun gösterilir.
 - `{` sonrası otomatik girinti; boş satıra yazılan `}` kendi `{` satırıyla hizalanır.
 - Anahtar kelimeler ve türler kalın; ters eğik çizgiyle biten `//` yorumunun alt satırı da yorum renginde gösterilir.

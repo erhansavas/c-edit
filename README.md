@@ -9,7 +9,7 @@
 </div>
 
 <p align="center">
-  <img src="docs/screenshots/editor.png" width="760" alt="C Editor’de hatasız derlenmiş Türkçe bir C programı">
+  <img src="docs/screenshots/editor.png" width="760" alt="C Editor’de derlenip kodun altındaki konsolda çalışmış Türkçe bir C programı">
 </p>
 
 C Editor, C öğrenenler için yapıldı. Kurulacak ya da ayarlanacak bir şey yok: bir dosya açın veya yazmaya
@@ -62,20 +62,21 @@ int main()
 **⌘R**’ye basın, iki sayı yazın; konsolda şunu görürsünüz:
 
 ```text
+Derleme başarılı (0,10 sn): hata yok, uyarı yok.
 Birinci sayıyı girin: 12
 İkinci sayıyı girin: 30
 Toplam: 42
 
 --------------------------------
-Program 0,22 sn içinde bitti, çıkış kodu 0.
-Pencereyi kapatmak için bir tuşa basın.
+Program 0,27 sn içinde bitti, çıkış kodu 0.
+Paneli kapatmak için bir tuşa basın.
 ```
 
 ## Hata yapınca
 
 Aynı programda iki tipik hata: bir satırda noktalı virgül unutulmuş, diğerinde scanf’te `&` eksik. Hatalı
-satırlar işaretlenir, altında Türkçe açıklaması çıkar. Mavi açıklamaya tıklayınca derleyicinin önerdiği düzeltme
-uygulanır.
+satırlar işaretlenir; editörün altındaki listede her mesajın altında Türkçe açıklaması çıkar. Mavi açıklamaya
+tıklayınca derleyicinin önerdiği düzeltme uygulanır.
 
 <p align="center">
   <img src="docs/screenshots/hatalar.png" width="760" alt="C Editor’de iki hata ve altlarında Türkçe açıklamaları">
