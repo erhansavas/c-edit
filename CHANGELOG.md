@@ -1,6 +1,6 @@
 # Değişiklikler
 
-## Yayımlanmamış
+## 0.3 — 24 Ekim 2026
 
 - Süslü parantezsiz `if`/`else`/`for`/`while`/`do` sonrası otomatik girinti, tek komutun ardından geri dönüş;
   kendi satırına yazılan `{` üstündeki `if`/`else` ile hizalanır.
