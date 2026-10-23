@@ -15,9 +15,11 @@ struct Span {
     Token token;
 };
 
-// Carried from one line to the next: whether the line starts inside a /* comment */.
+// Carried from one line to the next: whether the line starts inside a /* comment */, or inside a
+// // comment that the line before ended with a backslash, which joins the next line to it in C.
 struct LineState {
     bool in_comment = false;
+    bool in_line_comment = false;
     friend bool operator==(LineState, LineState) = default;
 };
 

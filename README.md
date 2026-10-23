@@ -13,12 +13,16 @@
 </p>
 
 C Editor, C öğrenenler için yapıldı. Kurulacak ya da ayarlanacak bir şey yok: bir dosya açın veya yazmaya
-başlayın, **⌘R**’ye basın; programınız kendi penceresinde çalışsın. Okuldaki Windows bilgisayarlarda yazılan
+başlayın, **⌘R**’ye basın; programınız kodun altındaki konsolda çalışsın. Okuldaki Windows bilgisayarlarda yazılan
 kod da Türkçe karakterleriyle birlikte olduğu gibi çalışır.
 
 ## Özellikler
 
-- **Hızlı ve sade bir editör:** sözdizimi renklendirme, sekmeler, trackpad ile yakınlaştırma.
+- **Hızlı ve sade bir editör:** sözdizimi renklendirme, sekmeler (**⌘1**…**⌘8** ile sekme seçilir, **⌘9** son
+  sekme, **⌘⇧T** kapatılan sekmeyi yeniden açar), trackpad ile yakınlaştırma.
+- **Yazarken düzen, ama dokunmadan:** `{` ile biten satırdan sonra yeni satır bir kademe içeriden başlar; boş
+  satıra yazılan `}` kendi `{` satırıyla hizalanır. Yazdığınız başka hiçbir şey değiştirilmez. `\` ile biten bir
+  `//` yorumu, C’de olduğu gibi alt satırı da yoruma katar; editör o satırı da yorum renginde gösterir.
 - **Tek tuşla derle ve çalıştır:** **⌘R**, **F11** ya da ▶︎ düğmesi. Hatalar editörün altında listelenir ve
   satırlarında işaretlenir; birine tıklayınca o satıra gidilir.
 - **Hatalarda Türkçe yardım:** sık yapılan hatalar Türkçe açıklanır: eksik noktalı virgül, scanf’te unutulan &,
@@ -26,8 +30,10 @@ kod da Türkçe karakterleriyle birlikte olduğu gibi çalışır.
   geri alınır. [Örneğe bakın](#hata-yapınca).
 - **Anlaşılır mesajlar:** “Derleme başarılı (0,08 sn): hata yok, uyarı yok.” Program bitince çıkış kodunu,
   çökerse nedenini söyler; örneğin izin verilmeyen bir bellek alanına eriştiğini.
-- **Her çalıştırma için bir konsol penceresi:** program sorduğunda girdiyi yazarsınız. **Ctrl+C** programı
-  durdurur; pencereyi kapatmak, sonsuz döngüye girmiş bir programı bile sonlandırır.
+- **Kodun altında bir konsol:** program pencerenin altındaki panelde çalışır; panel çıktı arttıkça 80×25’e
+  kadar büyür. Program sorduğunda panele tıklayıp girdiyi yazarsınız. **Ctrl+C** programı durdurur; program
+  bitince herhangi bir tuş paneli kapatır; `\a` yüksek sesli bir uyarı sesi çalar. Pencereyi kapatmak, sonsuz
+  döngüye girmiş bir programı bile sonlandırır.
 - **Her yerde Türkçe:** Türkçe karakterler editörde, konsolda ve dosyalarda doğru görünür. Dosyalar UTF-8 ya da
   Windows-1254 (Türkçe) olarak açılır ve kendi biçimlerinde kaydedilir. Yeni dosyalar Windows’un kaydettiği
   biçimdedir (Windows-1254, CRLF); böylece okuldaki bilgisayarlarda da düzgün açılır. İkisi de durum

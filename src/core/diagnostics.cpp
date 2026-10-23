@@ -161,6 +161,23 @@ std::string explain(std::string_view message, std::string_view source_line) {
         return "Koşulda = (atama) kullanılmış; karşılaştırmak için == yazın.";
     if (starts("if statement has empty body"))
         return "if satırının sonunda fazladan noktalı virgül (;) var; if’in gövdesi boş kalıyor.";
+    if (starts("for loop has empty body") || starts("while loop has empty body"))
+        return "Döngü satırının sonunda fazladan noktalı virgül (;) var; döngünün gövdesi boş kalıyor.";
+    if (starts("more '%' conversions than data arguments"))
+        return "Biçim metninde verilen değerlerden fazla %d, %f… var: her biri için bir değer verin.";
+    if (starts("data argument not used by format string"))
+        return "Fazladan bir değer verilmiş: biçim metninde onun için bir %d, %f… yok.";
+    if (starts("format string is not a string literal"))
+        return "İlk değer tırnak içinde bir biçim metni olmalı, örneğin printf(\"%d\", x);";
+    if (starts("result of comparison against a string literal"))
+        return "Metinler == ile karşılaştırılamaz: strcmp(s, \"evet\") == 0 yazın (#include <string.h>).";
+    if (starts("equality comparison result unused")) return "== karşılaştırır, değer vermez; atamak için = yazın.";
+    if (starts("array type 'char[")) return "Bir diziye = ile metin atanamaz: strcpy(s, \"metin\") yazın (#include <string.h>).";
+    if (starts("array type '")) return "Bir dizi = ile toptan atanamaz; elemanları tek tek (örneğin döngüyle) atayın.";
+    if (starts("variable-sized object may not be initialized"))
+        return "Boyutu bir değişken olan dizi = {…} ile başlatılamaz: boyutu sabit yazın ya da elemanları döngüyle atayın.";
+    if (starts("void function '") && has("should not return a value"))
+        return "void bir fonksiyon değer döndürmez: yalnızca return; yazın ya da dönüş türünü değiştirin.";
     if (starts("expected '}'")) return "Bir süslü parantez (}) eksik: her { için bir } olmalı.";
     if (starts("extraneous closing brace")) return "Fazladan bir süslü parantez (}) var.";
     if (starts("expected ')'")) return "Kapanış parantezi ) eksik.";

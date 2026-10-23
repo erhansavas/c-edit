@@ -101,6 +101,7 @@ void Terminal::feed(std::string_view bytes) {
             case '\n': line_feed(); column_ = 0; break;
             case '\r': column_ = 0; break;
             case '\b': column_ -= column_ > 0 ? 1 : 0; break;
+            case '\a': ++bells_; break;
             case '\t':
                 if (column_ < columns) column_ = std::min(column_ + 8 - column_ % 8, columns - 1);
                 break;

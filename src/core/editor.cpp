@@ -78,14 +78,32 @@ void Editor::replace(std::size_t from, std::size_t to, std::string_view with, bo
 
 void Editor::insert(std::string_view text) {
     const auto [from, to] = selection();
+    if (text == "}" && from == to) {
+        // A closing brace typed on a blank line lines up with the line of its opening brace.
+        const std::size_t start = starts_[line_of(from)];
+        const std::size_t indent_end = std::min(text_.find_first_not_of(" \t", start), text_.size());
+        std::size_t depth = 0;
+        for (std::size_t i = start; indent_end >= from && i-- > 0;) {
+            if (text_[i] == '}') ++depth;
+            if (text_[i] != '{' || depth-- > 0) continue;
+            const std::size_t open = starts_[line_of(i)];
+            const std::string indent = text_.substr(open, text_.find_first_not_of(" \t", open) - open);
+            if (indent == std::string_view(text_).substr(start, from - start)) break;
+            return replace(start, from, indent + "}", false);
+        }
+    }
     replace(from, to, text, text.size() <= 4 && from == to);
 }
 
 void Editor::insert_newline() {
     const auto [from, to] = selection();
+    const std::size_t start = starts_[line_of(from)];
     std::string text = "\n";
-    for (std::size_t i = starts_[line_of(from)]; i < from && (text_[i] == ' ' || text_[i] == '\t'); ++i)
-        text.push_back(text_[i]);
+    for (std::size_t i = start; i < from && (text_[i] == ' ' || text_[i] == '\t'); ++i) text.push_back(text_[i]);
+    // After an opening brace the next line goes one level deeper.
+    std::size_t last = from;
+    while (last > start && (text_[last - 1] == ' ' || text_[last - 1] == '\t')) --last;
+    if (last > start && text_[last - 1] == '{') text.append(tab_width, ' ');
     replace(from, to, text, false);
 }
 

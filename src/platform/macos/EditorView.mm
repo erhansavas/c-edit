@@ -254,7 +254,7 @@ std::size_t utf8_length(std::string_view text, NSUInteger units) {
         }
 
         NSString* number = [NSString stringWithFormat:@"%zu", line + 1];
-        cedit::mac::draw_plain(context, number, line == caret_line ? NSColor.secondaryLabelColor : NSColor.tertiaryLabelColor,
+        cedit::mac::draw_plain(context, number, line == caret_line ? NSColor.labelColor : NSColor.tertiaryLabelColor,
                              NSMakePoint(gutter - gutter_padding - static_cast<CGFloat>(number.length) * metrics.advance, y));
 
         const std::string_view text = _editor.line(line);

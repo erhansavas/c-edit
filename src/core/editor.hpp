@@ -40,8 +40,10 @@ public:
     }
     std::uint64_t revision() const { return revision_; }
 
-    void insert(std::string_view text);  // replaces the selection; consecutive typing undoes as one step
-    void insert_newline();               // keeps the indentation in front of the caret
+    // Replaces the selection; consecutive typing undoes as one step. A "}" typed on a blank line
+    // lines up with its opening brace.
+    void insert(std::string_view text);
+    void insert_newline();  // keeps the indentation in front of the caret, one level deeper after '{'
     void insert_tab();
     void delete_backward();
     void delete_forward();

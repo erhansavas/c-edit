@@ -40,6 +40,14 @@ LineState highlight_c(std::string_view line, LineState state, std::vector<Span>&
         state.in_comment = close == std::string_view::npos;
         add(begin, i, Token::comment);
     };
+    // A // comment goes on while its lines end with a backslash (spaces after it still count).
+    const std::size_t last = line.find_last_not_of(" \t");
+    const bool spliced = last != std::string_view::npos && line[last] == '\\';
+    if (state.in_line_comment) {
+        add(0, size, Token::comment);
+        state.in_line_comment = spliced;
+        return state;
+    }
     if (state.in_comment) skip_comment(0);
 
     std::size_t first = line.find_first_not_of(" \t");
@@ -64,6 +72,7 @@ LineState highlight_c(std::string_view line, LineState state, std::vector<Span>&
         const std::size_t begin = i;
         if (c == '/' && i + 1 < size && line[i + 1] == '/') {
             add(begin, size, Token::comment);
+            state.in_line_comment = spliced;
             break;
         }
         if (c == '/' && i + 1 < size && line[i + 1] == '*') {

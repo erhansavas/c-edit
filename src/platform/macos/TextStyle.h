@@ -14,6 +14,7 @@ namespace cedit::mac {
 // One monospaced font for every text surface; all layout is cell based.
 struct TextMetrics {
     NSFont* font;
+    NSFont* bold;         // same cells, for keywords and types
     CGFloat advance;      // width of one cell
     CGFloat line_height;
     CGFloat ascent;

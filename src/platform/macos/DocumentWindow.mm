@@ -10,7 +10,7 @@
 #include <string_view>
 #include <vector>
 
-#import "ConsoleWindow.h"
+#import "ConsolePane.h"
 #import "EditorView.h"
 #include "TextStyle.h"
 #include "core/editor.hpp"
@@ -24,7 +24,10 @@ using cedit::mac::text_metrics_changed;
 namespace {
 
 constexpr CGFloat status_height = 26;
-constexpr CGFloat log_height = 150;
+constexpr CGFloat log_padding = 8;          // above and below the build messages
+constexpr std::size_t log_min_lines = 2;
+constexpr CGFloat log_max_share = 0.4;      // of what the console leaves, so the code always stays in view
+constexpr CGFloat console_max_share = 0.5;  // of the window
 
 NSString* ns(std::string_view text) {
     NSString* string = [[NSString alloc] initWithBytes:text.data() length:text.size() encoding:NSUTF8StringEncoding];
@@ -44,10 +47,14 @@ void alert(NSString* message, NSString* detail) {
 
 }  // namespace
 
+NSString* const CEDocumentTabs = @"CEDocument";
+
 // Compiler output; clicking a diagnostic line jumps to it in the editor.
 @interface CELogView : NSView
 @property(nonatomic, copy) void (^onClickLine)(NSString* line, NSString* above);
+@property(nonatomic, readonly) std::size_t lineCount;
 - (void)setText:(const std::string&)text;
+- (void)layoutLines;  // after the text or the visible size changed
 @end
 
 @implementation CELogView {
@@ -65,6 +72,8 @@ void alert(NSString* message, NSString* detail) {
                                              object:nil];
     return self;
 }
+
+- (std::size_t)lineCount { return _lines.size(); }
 
 - (void)setText:(const std::string&)text {
     _lines.clear();
@@ -85,7 +94,7 @@ void alert(NSString* message, NSString* detail) {
     for (const std::string& line : _lines) widest = std::max(widest, line.size());
     const NSSize visible = self.enclosingScrollView.contentSize;
     [self setFrameSize:NSMakeSize(std::max(visible.width, 12 + static_cast<CGFloat>(widest) * metrics.advance),
-                                  std::max(visible.height, 8 + static_cast<CGFloat>(_lines.size()) * metrics.line_height))];
+                                  std::max(visible.height, log_padding + static_cast<CGFloat>(_lines.size()) * metrics.line_height))];
     [self setNeedsDisplay:YES];
 }
 
@@ -133,7 +142,9 @@ void alert(NSString* message, NSString* detail) {
     NSPopUpButton* _encodingMenu;
     NSPopUpButton* _lineEndMenu;
     NSButton* _runButton;
-    CEConsoleSession* _console;
+    CEConsoleSession* _console;  // its pane sits under the build messages while it exists
+    NSBox* _logDivider;
+    NSBox* _consoleDivider;
     NSString* _workDir;  // compiler scratch folder of this document
     std::vector<cedit::Diagnostic> _built;  // what the last build reported
     std::uint64_t _builtRevision;           // the editor revision that build compiled
@@ -181,7 +192,7 @@ void alert(NSString* message, NSString* detail) {
     _window.delegate = self;
     _window.minSize = NSMakeSize(420, 300);
     _window.tabbingMode = NSWindowTabbingModePreferred;
-    _window.tabbingIdentifier = @"CEDocument";
+    _window.tabbingIdentifier = CEDocumentTabs;
 
     // Vector SF Symbol: stays sharp at every size and display scale.
     NSImage* playImage = [[NSImage imageWithSystemSymbolName:@"play.fill" accessibilityDescription:@"Derle ve Çalıştır"]
@@ -226,17 +237,31 @@ void alert(NSString* message, NSString* detail) {
     _encodingMenu = [self statusMenu:@[ @"UTF-8", @"Windows-1254 (Türkçe)" ] action:@selector(encodingPicked:)];
     _lineEndMenu = [self statusMenu:@[ @"LF (macOS)", @"CRLF (Windows)" ] action:@selector(lineEndPicked:)];
 
-    for (NSView* view in @[ _editorScroll, _logScroll, _position, _encodingMenu, _lineEndMenu ]) [content addSubview:view];
+    _logDivider = [self divider];
+    _consoleDivider = [self divider];
+    for (NSView* view in @[ _editorScroll, _logScroll, _position, _encodingMenu, _lineEndMenu, _logDivider, _consoleDivider ])
+        [content addSubview:view];
     content.postsFrameChangedNotifications = YES;
     [NSNotificationCenter.defaultCenter addObserver:self
                                            selector:@selector(layoutPanes)
                                                name:NSViewFrameDidChangeNotification
                                              object:content];
+    [NSNotificationCenter.defaultCenter addObserver:self
+                                           selector:@selector(layoutPanes)
+                                               name:text_metrics_changed
+                                             object:nil];
     [self updateTitle];
     [self updatePosition];
     [self updateFormat];
     [_window center];
     [_window makeFirstResponder:_editorView];
+}
+
+- (NSBox*)divider {
+    NSBox* line = [[NSBox alloc] initWithFrame:NSZeroRect];
+    line.boxType = NSBoxSeparator;
+    line.hidden = YES;
+    return line;
 }
 
 - (NSPopUpButton*)statusMenu:(NSArray<NSString*>*)titles action:(SEL)action {
@@ -251,13 +276,42 @@ void alert(NSString* message, NSString* detail) {
     return menu;
 }
 
+// The build messages take the height of their lines, from two up to a share of the window.
+- (CGFloat)logHeightIn:(CGFloat)available {
+    if (_logScroll.hidden) return 0;
+    const CGFloat line = text_metrics().line_height;
+    const std::size_t lines = std::max(log_min_lines, _log.lineCount);
+    const NSSize text = NSMakeSize(0, log_padding + static_cast<CGFloat>(lines) * line);
+    const CGFloat wanted = [NSScrollView frameSizeForContentSize:text
+                                         horizontalScrollerClass:NSScroller.class
+                                           verticalScrollerClass:nil
+                                                      borderType:NSNoBorder
+                                                     controlSize:NSControlSizeRegular
+                                                   scrollerStyle:NSScroller.preferredScrollerStyle]
+                               .height;
+    const CGFloat smallest = log_padding + static_cast<CGFloat>(log_min_lines) * line;
+    return std::round(std::min(wanted, std::max(smallest, std::floor(log_max_share * available))));
+}
+
+// From the bottom: status bar, program console, build messages, code.
 - (void)layoutPanes {
     const NSRect bounds = _window.contentView.bounds;
     const CGFloat width = NSWidth(bounds);
-    const CGFloat log = _logScroll.hidden ? 0 : log_height;
-    const CGFloat top = NSHeight(bounds);
-    _editorScroll.frame = NSMakeRect(0, status_height + log, width, std::max<CGFloat>(0, top - status_height - log));
-    _logScroll.frame = NSMakeRect(0, status_height, width, log);
+    const CGFloat available = NSHeight(bounds) - status_height;
+    const CGFloat console = _console ? [_console heightWithin:std::floor(console_max_share * available)] : 0;
+    const CGFloat log = [self logHeightIn:available - console];
+    const CGFloat code = std::max<CGFloat>(0, available - console - log);
+    _consoleDivider.hidden = !_console;
+    _logDivider.hidden = _logScroll.hidden;
+    if (_console) {
+        _console.pane.frame = NSMakeRect(0, status_height, width, console);
+        _consoleDivider.frame = NSMakeRect(0, status_height + console - 1, width, 1);
+        [_console layoutPane];
+    }
+    _logScroll.frame = NSMakeRect(0, status_height + console, width, log);
+    _logDivider.frame = NSMakeRect(0, status_height + console + log - 1, width, 1);
+    if (!_logScroll.hidden) [_log layoutLines];
+    _editorScroll.frame = NSMakeRect(0, status_height + console + log, width, code);
     _position.frame = NSMakeRect(10, 5, 160, 16);
     CGFloat x = width - 8;
     for (NSPopUpButton* menu : @[ _lineEndMenu, _encodingMenu ]) {
@@ -279,7 +333,7 @@ void alert(NSString* message, NSString* detail) {
 
 - (void)updatePosition {
     const std::size_t caret = _editor->caret();
-    _position.stringValue = [NSString stringWithFormat:@"Satır %zu, Sütun %zu", _editor->line_of(caret) + 1, _editor->column_of(caret) + 1];
+    _position.stringValue = [NSString stringWithFormat:@"Sütun %zu", _editor->column_of(caret) + 1];  // the gutter shows the line
 }
 
 // After the encoding or the line ends changed.
@@ -393,23 +447,22 @@ void alert(NSString* message, NSString* detail) {
     _closed = YES;
     [NSNotificationCenter.defaultCenter removeObserver:self];
     [_console close];
+    _console = nil;
     if (self.onClose) self.onClose(self);
 }
 
 #pragma mark - Compile and run
 
 - (void)showLog:(const std::string&)text {
-    if (_logScroll.hidden) {
-        _logScroll.hidden = NO;
-        [self layoutPanes];
-    }
+    _logScroll.hidden = NO;
     [_log setText:text];
+    [self layoutPanes];
 }
 
 - (void)run:(id)sender {
     (void)sender;
     if (_compiling || ![self save]) return;
-    [_console close];
+    [self closeConsole];
     _compiling = YES;
     _runButton.enabled = NO;
     [self showLog:std::string(_path.lastPathComponent.UTF8String) + " derleniyor…"];
@@ -463,13 +516,31 @@ void alert(NSString* message, NSString* detail) {
             if (diagnostic.error) return [_editorView goToLine:diagnostic.line column:diagnostic.column];
         return;
     }
-    __weak CEDocumentWindow* weakSelf = self;
+    // Without messages to read, the build summary heads the console instead of a pane of its own.
+    std::string_view summary = result.log;
+    while (summary.ends_with('\n')) summary.remove_suffix(1);
+    summary.remove_prefix(std::min(summary.size(), summary.rfind('\n') + 1));
+    if (result.diagnostics.empty()) _logScroll.hidden = YES;
     _console = [CEConsoleSession runProgram:[NSString stringWithUTF8String:result.binary.c_str()]
-                                 inDirectory:_path.stringByDeletingLastPathComponent
-                                     onClose:^(CEConsoleSession* session) {
-                                         CEDocumentWindow* document = weakSelf;
-                                         if (document && document->_console == session) document->_console = nil;
-                                     }];
+                                inDirectory:_path.stringByDeletingLastPathComponent
+                                     header:result.diagnostics.empty() ? summary : std::string_view()];
+    __weak CEDocumentWindow* weakSelf = self;
+    _console.onResize = ^{ [weakSelf layoutPanes]; };
+    _console.onDismiss = ^{ [weakSelf closeConsole]; };
+    [_window.contentView addSubview:_console.pane positioned:NSWindowBelow relativeTo:_consoleDivider];
+    [self layoutPanes];
+    [_window makeFirstResponder:_console.keyView];
+}
+
+// Ends the program, if it still runs, and gives its room back to the code.
+- (void)closeConsole {
+    if (!_console) return;
+    const BOOL focused = _window.firstResponder == _console.keyView;
+    [_console close];
+    [_console.pane removeFromSuperview];
+    _console = nil;
+    [self layoutPanes];
+    if (focused) [_window makeFirstResponder:_editorView];
 }
 
 // A message line jumps to its place. The explanation under it also applies the compiler's fix, while the

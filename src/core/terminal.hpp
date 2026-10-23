@@ -24,6 +24,7 @@ public:
     const std::deque<std::u32string>& lines() const { return lines_; }
     std::size_t cursor_line() const { return line_; }
     std::size_t cursor_column() const { return column_; }
+    std::size_t bells() const { return bells_; }  // '\a' received so far; the console beeps for each new one
 
 private:
     enum class State : std::uint8_t { ground, escape, csi };
@@ -36,6 +37,7 @@ private:
 
     std::deque<std::u32string> lines_;
     std::size_t line_ = 0;
+    std::size_t bells_ = 0;
     std::size_t column_ = 0;  // == columns after the last cell of a line was written: the next character wraps
     State state_ = State::ground;
     std::string parameters_;

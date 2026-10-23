@@ -1,4 +1,4 @@
-#import "ConsoleWindow.h"
+#import "ConsolePane.h"
 
 #include <poll.h>
 #include <signal.h>
@@ -9,6 +9,7 @@
 #include <cerrno>
 #include <chrono>
 #include <cmath>
+#include <cstdint>
 #include <cstring>
 #include <optional>
 #include <string>
@@ -24,8 +25,35 @@ using cedit::mac::text_metrics_changed;
 namespace {
 
 constexpr unsigned short console_rows = 25;
+constexpr std::size_t first_rows = 8;  // enough for a short program and the closing lines
 constexpr CGFloat inset = 6;
 constexpr std::size_t read_limit = 64 * 1024;  // per wake-up, so endless output cannot starve the event loop
+
+// "\a" (alert): a quarter-second 880 Hz tone at full scale, about 10 dB louder than the
+// loudest system alert sound, made once in memory as a 16-bit mono WAV.
+NSSound* bell_sound() {
+    static NSSound* const sound = [] {
+        constexpr std::uint32_t rate = 44100;
+        constexpr std::uint32_t frames = rate / 4;
+        constexpr std::uint32_t fade = rate / 200;  // 5 ms in and out, so the tone does not click
+        std::string wav = "RIFF....WAVEfmt ";
+        const auto put = [&](std::uint32_t value, int bytes) {
+            for (int i = 0; i < bytes; ++i) wav.push_back(static_cast<char>((value >> (8 * i)) & 0xFF));
+        };
+        put(16, 4), put(1, 2), put(1, 2), put(rate, 4), put(rate * 2, 4), put(2, 2), put(16, 2);
+        wav += "data";
+        put(frames * 2, 4);
+        for (std::uint32_t i = 0; i < frames; ++i) {
+            const double envelope = std::min({1.0, i / double(fade), (frames - i) / double(fade)});
+            const double sample = 0.95 * 32767 * envelope * std::sin(2 * M_PI * 880 * i / rate);
+            put(static_cast<std::uint32_t>(static_cast<std::int16_t>(sample)) & 0xFFFF, 2);
+        }
+        const auto size = static_cast<std::uint32_t>(wav.size() - 8);
+        for (int i = 0; i < 4; ++i) wav[static_cast<std::size_t>(4 + i)] = static_cast<char>((size >> (8 * i)) & 0xFF);
+        return [[NSSound alloc] initWithData:[NSData dataWithBytes:wav.data() length:wav.size()]];
+    }();
+    return sound;
+}
 
 CGFloat console_width() { return 2 * inset + static_cast<CGFloat>(cedit::Terminal::columns) * text_metrics().advance; }
 
@@ -40,7 +68,9 @@ NSString* string_of(const std::u32string& line) {
 // Owns the terminal it draws, so the screen stays valid for as long as the view exists.
 @interface CEConsoleView : NSView
 @property(nonatomic, copy) void (^onKeys)(NSString* bytes);
+@property(nonatomic, readonly) std::size_t lineCount;
 - (void)show:(std::string_view)output;
+- (void)terminalChanged;  // after new output or a new size: re-lays out and shows the cursor line
 @end
 
 @implementation CEConsoleView {
@@ -60,8 +90,15 @@ NSString* string_of(const std::u32string& line) {
     return self;
 }
 
+- (std::size_t)lineCount { return _terminal.lines().size(); }
+
 - (void)show:(std::string_view)output {
+    const std::size_t bells = _terminal.bells();
     _terminal.feed(output);
+    if (_terminal.bells() != bells) {  // "\a" beeps, as in a console
+        [bell_sound() stop];
+        [bell_sound() play];
+    }
     [self terminalChanged];
 }
 
@@ -131,55 +168,68 @@ NSString* string_of(const std::u32string& line) {
 @end
 
 @implementation CEConsoleSession {
-    NSWindow* _window;
+    NSScrollView* _pane;
     CEConsoleView* _view;
     std::optional<cedit::PtyChild> _child;
     dispatch_source_t _reader;  // the pty master is open exactly while this exists
     dispatch_source_t _exitWatch;
     std::chrono::steady_clock::time_point _started;
+    std::size_t _rows;  // rows the pane shows; it only grows, so the code above never jumps back
     BOOL _exited;
-    void (^_onClose)(CEConsoleSession*);
 }
 
-+ (instancetype)runProgram:(NSString*)program
-               inDirectory:(NSString*)directory
-                   onClose:(void (^)(CEConsoleSession*))onClose {
++ (instancetype)runProgram:(NSString*)program inDirectory:(NSString*)directory header:(std::string_view)header {
     CEConsoleSession* session = [[self alloc] init];
-    session->_onClose = [onClose copy];
-    [session openWindowTitled:program.lastPathComponent];
+    [session makePane];
+    if (!header.empty()) [session->_view show:std::string(header) + "\r\n"];
     [session start:program directory:directory];
     return session;
 }
 
-- (void)openWindowTitled:(NSString*)title {
-    const NSRect frame = NSMakeRect(0, 0, console_width() + 16, 2 * inset + console_rows * text_metrics().line_height);
-    _window = [[NSWindow alloc] initWithContentRect:frame
-                                          styleMask:NSWindowStyleMaskTitled | NSWindowStyleMaskClosable |
-                                                    NSWindowStyleMaskMiniaturizable | NSWindowStyleMaskResizable
-                                            backing:NSBackingStoreBuffered
-                                              defer:NO];
-    _window.releasedWhenClosed = NO;
-    _window.tabbingMode = NSWindowTabbingModeDisallowed;
-    _window.title = title;
-    _window.delegate = self;
-    NSScrollView* scroll = [[NSScrollView alloc] initWithFrame:frame];
-    scroll.hasVerticalScroller = YES;
-    scroll.hasHorizontalScroller = YES;
-    scroll.autohidesScrollers = YES;
-    _view = [[CEConsoleView alloc] initWithFrame:frame];
+- (NSScrollView*)pane { return _pane; }
+- (NSView*)keyView { return _view; }
+
+- (void)makePane {
+    _rows = first_rows;
+    _pane = [[NSScrollView alloc] initWithFrame:NSMakeRect(0, 0, 400, 200)];
+    _pane.hasVerticalScroller = YES;
+    _pane.hasHorizontalScroller = YES;
+    _pane.autohidesScrollers = YES;
+    _pane.borderType = NSNoBorder;
+    _view = [[CEConsoleView alloc] initWithFrame:_pane.bounds];
     __weak CEConsoleSession* weakSelf = self;
     _view.onKeys = ^(NSString* keys) { [weakSelf typed:keys]; };
-    scroll.documentView = _view;
-    _window.contentView = scroll;
-    [_window center];
-    [_window makeKeyAndOrderFront:nil];
-    [_window makeFirstResponder:_view];
+    _pane.documentView = _view;
+    [NSNotificationCenter.defaultCenter addObserver:self
+                                           selector:@selector(textMetricsChanged)
+                                               name:text_metrics_changed
+                                             object:nil];
+}
+
+- (void)dealloc { [NSNotificationCenter.defaultCenter removeObserver:self]; }
+
+- (CGFloat)heightWithin:(CGFloat)limit {
+    const NSSize text = NSMakeSize(console_width(), 2 * inset + static_cast<CGFloat>(_rows) * text_metrics().line_height);
+    const CGFloat wanted = [NSScrollView frameSizeForContentSize:text
+                                         horizontalScrollerClass:NSScroller.class
+                                           verticalScrollerClass:nil
+                                                      borderType:NSNoBorder
+                                                     controlSize:NSControlSizeRegular
+                                                   scrollerStyle:NSScroller.preferredScrollerStyle]
+                               .height;
+    return std::round(std::min(wanted, limit));
+}
+
+- (void)layoutPane { [_view terminalChanged]; }
+
+- (void)textMetricsChanged {
+    if (self.onResize) self.onResize();
 }
 
 - (void)start:(NSString*)program directory:(NSString*)directory {
     _started = std::chrono::steady_clock::now();
     _child = cedit::spawn_in_pty(program.fileSystemRepresentation, directory.fileSystemRepresentation,
-                                 cedit::Terminal::columns, console_rows);
+                               cedit::Terminal::columns, console_rows);
     if (!_child) {
         [self finishWith:"Program başlatılamadı."];
         return;
@@ -219,7 +269,16 @@ NSString* string_of(const std::u32string& line) {
         pollfd more{_child->master, POLLIN, 0};
         if (output.empty() || std::chrono::steady_clock::now() >= deadline || ::poll(&more, 1, 1) <= 0) break;
     }
-    if (!output.empty()) [_view show:output];
+    if (!output.empty()) [self show:output];
+}
+
+// Grows the pane with the lines written so far.
+- (void)show:(std::string_view)output {
+    [_view show:output];
+    const std::size_t rows = std::min<std::size_t>(console_rows, _view.lineCount);
+    if (rows <= _rows) return;
+    _rows = rows;
+    if (self.onResize) self.onResize();
 }
 
 - (void)reap {
@@ -246,36 +305,34 @@ NSString* string_of(const std::u32string& line) {
 - (void)finishWith:(const std::string&)ending {
     _exited = YES;
     [self stopWatching];
-    [_view show:"\r\n--------------------------------\r\n" + ending + "\r\nPencereyi kapatmak için bir tuşa basın."];
+    [self show:"\r\n--------------------------------\r\n" + ending + "\r\nPaneli kapatmak için bir tuşa basın."];
 }
 
 - (void)typed:(NSString*)keys {
-    if (_exited) return [self close];
+    if (_exited) {
+        if (self.onDismiss) self.onDismiss();
+        return;
+    }
     const char* bytes = keys.UTF8String;
     if (bytes && _reader) (void)::write(_child->master, bytes, std::strlen(bytes));
 }
 
-- (void)close { [_window close]; }
-
-- (void)windowWillClose:(NSNotification*)notification {
-    (void)notification;
-    if (!_exited && _child) {
-        // The whole process group: the program and anything it started, such as a system() shell.
-        const pid_t pid = _child->pid;
-        if (::kill(-pid, SIGKILL) != 0) ::kill(pid, SIGKILL);
-        _exited = YES;
-        [self stopWatching];
-        // A killed program still flushes its pending output and only finishes exiting once the terminal
-        // is closed (by the reader's cancel handler, on this queue), so it is reaped off the main thread.
-        dispatch_async(dispatch_get_global_queue(QOS_CLASS_UTILITY, 0), ^{
-            while (::waitpid(pid, nullptr, 0) < 0 && errno == EINTR) {
-            }
-        });
-    }
+- (void)close {
     _view.onKeys = nil;
-    void (^onClose)(CEConsoleSession*) = _onClose;
-    _onClose = nil;
-    if (onClose) dispatch_async(dispatch_get_main_queue(), ^{ onClose(self); });
+    self.onResize = nil;
+    self.onDismiss = nil;
+    if (_exited || !_child) return;
+    // The whole process group: the program and anything it started, such as a system() shell.
+    const pid_t pid = _child->pid;
+    if (::kill(-pid, SIGKILL) != 0) ::kill(pid, SIGKILL);
+    _exited = YES;
+    [self stopWatching];
+    // A killed program still flushes its pending output and only finishes exiting once the terminal
+    // is closed (by the reader's cancel handler, on this queue), so it is reaped off the main thread.
+    dispatch_async(dispatch_get_global_queue(QOS_CLASS_UTILITY, 0), ^{
+        while (::waitpid(pid, nullptr, 0) < 0 && errno == EINTR) {
+        }
+    });
 }
 
 @end

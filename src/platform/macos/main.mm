@@ -9,10 +9,14 @@
 
 @implementation CEAppDelegate {
     NSMutableArray<CEDocumentWindow*>* _documents;
+    NSMutableArray<NSString*>* _closedPaths;  // most recent last, for Reopen Closed Tab
 }
 
 - (instancetype)init {
-    if ((self = [super init])) _documents = [NSMutableArray array];
+    if ((self = [super init])) {
+        _documents = [NSMutableArray array];
+        _closedPaths = [NSMutableArray array];
+    }
     return self;
 }
 
@@ -24,7 +28,9 @@
         // has finished closing: the block below holds it until then.
         dispatch_async(dispatch_get_main_queue(), ^{ (void)closed; });
         CEAppDelegate* app = weakSelf;
-        if (app) [app->_documents removeObject:closed];
+        if (!app) return;
+        [app->_documents removeObject:closed];
+        if (closed.path) [app->_closedPaths addObject:closed.path];
     };
     [_documents addObject:document];
     [document.window makeKeyAndOrderFront:nil];
@@ -97,6 +103,32 @@
     for (NSURL* url in panel.URLs) [self openPath:url.path];
 }
 
+- (void)reopenClosedTab:(id)sender {
+    (void)sender;
+    while (NSString* path = _closedPaths.lastObject) {
+        [_closedPaths removeLastObject];
+        if ([NSFileManager.defaultManager fileExistsAtPath:path]) return [self openPath:path];
+    }
+}
+
+- (BOOL)validateMenuItem:(NSMenuItem*)item {
+    if (item.action == @selector(reopenClosedTab:)) return _closedPaths.count > 0;
+    return YES;
+}
+
+#pragma mark - Window menu
+
+// ⌘1…⌘8 show that tab of the front document window and ⌘9 its last one, as in Safari.
+- (void)selectTab:(NSMenuItem*)sender {
+    for (NSWindow* window in NSApp.orderedWindows) {
+        if (![window.tabbingIdentifier isEqualToString:CEDocumentTabs]) continue;
+        NSArray<NSWindow*>* tabs = window.tabbedWindows ? window.tabbedWindows : @[ window ];
+        const NSUInteger index = sender.tag == 9 ? tabs.count - 1 : static_cast<NSUInteger>(sender.tag - 1);
+        if (index < tabs.count) [tabs[index] makeKeyAndOrderFront:nil];
+        return;
+    }
+}
+
 @end
 
 namespace {
@@ -130,6 +162,7 @@ NSMenu* build_menus() {
     item(file, @"Yeni", @selector(newDocument:), @"n");
     item(file, @"Yeni Sekme", @selector(newTab:), @"t");
     item(file, @"Aç…", @selector(openDocument:), @"o");
+    item(file, @"Kapatılan Sekmeyi Yeniden Aç", @selector(reopenClosedTab:), @"t", NSEventModifierFlagCommand | NSEventModifierFlagShift);
     [file addItem:NSMenuItem.separatorItem];
     item(file, @"Kapat", @selector(performClose:), @"w");
     item(file, @"Kaydet", @selector(saveDocument:), @"s");
@@ -166,6 +199,13 @@ NSMenu* build_menus() {
     [window addItem:NSMenuItem.separatorItem];
     item(window, @"Sonraki Sekmeyi Göster", @selector(selectNextTab:), @"\t", NSEventModifierFlagControl);
     item(window, @"Önceki Sekmeyi Göster", @selector(selectPreviousTab:), @"\t", NSEventModifierFlagControl | NSEventModifierFlagShift);
+    for (NSInteger n = 1; n <= 9; ++n) {
+        NSMenuItem* tab = item(window, [NSString stringWithFormat:@"%ld. Sekmeyi Göster", (long)n], @selector(selectTab:),
+                               [NSString stringWithFormat:@"%ld", (long)n]);
+        tab.tag = n;
+        tab.hidden = YES;
+        tab.allowsKeyEquivalentWhenHidden = YES;
+    }
     NSApp.windowsMenu = window;
     return bar;
 }

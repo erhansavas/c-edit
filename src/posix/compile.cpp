@@ -104,6 +104,8 @@ CompileResult compile(const CompileRequest& request) {
         "-x", cpp ? "c++" : "c",
         cpp ? "-std=gnu++14" : "-std=gnu11",
         "-O0", "-Wall", "-Wno-deprecated-declarations", "-fno-color-diagnostics", "-fdiagnostics-parseable-fixits",
+        // A // comment ending in a backslash, common in escape-sequence lessons; the editor shows the joined line as comment.
+        "-Wno-comment",
         // GCC on Windows only warns about these old habits, e.g. `main()` or a missing #include.
         "-Wno-error=implicit-int", "-Wno-error=implicit-function-declaration", "-Wno-error=int-conversion",
         "-Wno-error=incompatible-function-pointer-types", "-Wno-error=return-mismatch",

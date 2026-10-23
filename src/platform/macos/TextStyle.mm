@@ -23,7 +23,7 @@ TextMetrics make_metrics(CGFloat size) {
     const CGFloat advance = [@"0" sizeWithAttributes:@{NSFontAttributeName : font}].width;
     const CGFloat ascent = std::ceil(font.ascender);
     const CGFloat height = ascent + std::ceil(-font.descender) + std::ceil(font.leading) + 3;
-    return TextMetrics{font, advance, height, ascent + 1};
+    return TextMetrics{font, [NSFont monospacedSystemFontOfSize:size weight:NSFontWeightSemibold], advance, height, ascent + 1};
 }
 
 TextMetrics& metrics_slot() {
@@ -112,6 +112,8 @@ void draw_line(CGContextRef context, const DisplayLine& line, std::span<const Sp
         [text addAttribute:(id)kCTForegroundColorAttributeName
                      value:(id)token_color(span.token).CGColor
                      range:NSMakeRange(begin, end - begin)];
+        if (span.token == Token::keyword || span.token == Token::type)
+            [text addAttribute:(id)kCTFontAttributeName value:text_metrics().bold range:NSMakeRange(begin, end - begin)];
     }
     draw_attributed(context, text, origin);
 }

@@ -124,6 +124,33 @@ void editing() {
     indent.insert_newline();
     CHECK(indent.text() == "  \n    x");  // only the indentation in front of the caret is repeated
 
+    cedit::Editor block("int main() {");
+    block.set_caret(block.text().size(), false);
+    block.insert_newline();
+    CHECK(block.text() == "int main() {\n    ");  // one level deeper after '{'
+    block.insert("if (a) {");
+    block.insert_newline();
+    block.insert("b;");
+    block.insert_newline();
+    CHECK(block.text() == "int main() {\n    if (a) {\n        b;\n        ");
+    block.insert("}");
+    CHECK(block.text() == "int main() {\n    if (a) {\n        b;\n    }");  // lines up with its '{'
+    CHECK(block.undo() && block.text() == "int main() {\n    if (a) {\n        b;\n        ");
+    block.redo();
+    block.insert_newline();
+    block.insert("}");
+    CHECK(block.text().ends_with("    }\n}"));
+    block.insert("}");
+    CHECK(block.text().ends_with("    }\n}}"));  // after other text a brace is just typed
+    cedit::Editor odd("    if (a) {\n     b;\n     ");  // the class's own five-space indentation
+    odd.set_caret(odd.text().size(), false);
+    odd.insert("}");
+    CHECK(odd.text() == "    if (a) {\n     b;\n    }");
+    cedit::Editor lone("     ");
+    lone.set_caret(5, false);
+    lone.insert("}");
+    CHECK(lone.text() == "     }");  // no opening brace: typed as is
+
     cedit::Editor saved;
     saved.insert("a");
     saved.mark_saved();
@@ -143,9 +170,25 @@ void highlighting() {
           spans[2].token == cedit::Token::string && spans[2].end == 20);
     cedit::highlight_c("uint16_t x;", {}, spans);
     CHECK(spans.size() == 1 && spans[0].token == cedit::Token::type);
+
+    // The escape-sequence lesson: a // comment ending in a backslash takes in the next line, as in C.
+    state = cedit::highlight_c("    printf(\"C:\\\\Program Files\\\\\"); // C:\\Program Files\\", {}, spans);
+    CHECK(state.in_line_comment && spans.back().token == cedit::Token::comment);
+    state = cedit::highlight_c("    x = 1; \\ ", state, spans);
+    CHECK(state.in_line_comment && spans.size() == 1 && spans[0].token == cedit::Token::comment && spans[0].end == 13);
+    state = cedit::highlight_c("    return 0;", state, spans);
+    CHECK(!state.in_line_comment && spans.size() == 1 && spans[0].token == cedit::Token::comment);
+    state = cedit::highlight_c("    return 0;", state, spans);
+    CHECK(spans.size() == 2 && spans[0].token == cedit::Token::keyword);
+    state = cedit::highlight_c("    printf(\"\\\\\");", {}, spans);
+    CHECK(!state.in_line_comment);  // a backslash inside a string is not a comment's
 }
 
 void terminal() {
+    cedit::Terminal bell;
+    bell.feed("Uyari sesi: \a\a");
+    CHECK(bell.bells() == 2 && utf8_of(bell.lines()[0]) == "Uyari sesi: ");  // beeps, prints nothing
+
     cedit::Terminal screen;
     screen.feed("Birinci say\xC4");  // split code point
     screen.feed("\xB1y\xC4\xB1 girin: 2\r\n\x1B[1mx\x1B[0m\b\bab\rZ");
@@ -214,6 +257,16 @@ void diagnostics() {
                          "") == "“sqrt” için #include <math.h> satırı eksik.");
     CHECK(cedit::explain("variable 'x' is uninitialized when used here", "") ==
           "“x” değişkenine değer verilmeden kullanılıyor; önce bir değer atayın.");
+    // Messages as clang on this machine words them for the classic slips.
+    CHECK(cedit::explain("result of comparison against a string literal is unspecified (use an explicit string "
+                       "comparison function instead)",
+                       "")
+              .starts_with("Metinler == ile"));
+    CHECK(cedit::explain("array type 'char[20]' is not assignable", "").starts_with("Bir diziye = ile metin"));
+    CHECK(cedit::explain("array type 'int[5]' is not assignable", "").starts_with("Bir dizi = ile toptan"));
+    CHECK(cedit::explain("for loop has empty body", "").starts_with("Döngü satırının"));
+    CHECK(cedit::explain("more '%' conversions than data arguments", "").starts_with("Biçim metninde"));
+    CHECK(cedit::explain("void function 'g' should not return a value", "").starts_with("void bir fonksiyon"));
     CHECK(cedit::explain("a message no explanation knows", "").empty());
     CHECK(cedit::explain_link_error("Undefined symbols for architecture arm64:\n  \"_main\", referenced from:\n")
               .starts_with("Programda main() fonksiyonu yok"));

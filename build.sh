@@ -20,23 +20,41 @@ readonly common=(-isysroot "$sdk" -arch arm64 -mmacosx-version-min=27.0 -std=c++
 readonly checked=(-O1 -g -fsanitize=address,undefined -fno-sanitize-recover=undefined -fno-omit-frame-pointer)
 readonly portable=(src/core/*.cpp src/posix/*.cpp)
 readonly out=build/$config
-mkdir -p "$out"
+mkdir -p "$out/obj"
+
+# Compiles every source on its own core, then links them with the arguments after "--".
+compile_link() {
+    local output=$1 failed=0
+    local -a sources objects pids
+    shift
+    while [[ $1 != -- ]]; do sources+=("$1"); shift; done
+    shift
+    for source in $sources; do
+        objects+=("$out/obj/${${source//\//_}%.*}.o")
+        "$cxx" "${common[@]}" "${flags[@]}" -c "$source" -o "$objects[-1]" &
+        pids+=($!)
+    done
+    for pid in $pids; do wait $pid || failed=1; done
+    (( ! failed )) || exit 1
+    "$cxx" "${common[@]}" "${flags[@]}" "${objects[@]}" "$@" -o "$output"
+}
 
 if [[ $config == test ]]; then
-    "$cxx" "${common[@]}" "${checked[@]}" "${portable[@]}" tests/core_tests.cpp -liconv -o "$out/core_tests"
+    flags=("${checked[@]}")
+    compile_link "$out/core_tests" "${portable[@]}" tests/core_tests.cpp -- -liconv
     mkdir -p build/tmp
     exec "$out/core_tests" "${PWD}/resources/compat" "${PWD}/build/tmp"
 fi
 
 case $config in
-    release) flags=(-O3 -mcpu=${CE_CPU:-native} -flto=full -DNDEBUG) ;;
-    dist) flags=(-O3 -mcpu=apple-m1 -flto=full -DNDEBUG) ;;  # the oldest Apple silicon, so it runs on all of them
-    debug) flags=("${checked[@]}") ;;
+    release) flags=(-O3 -mcpu=${CE_CPU:-native} -flto=full -DNDEBUG -fobjc-arc) ;;
+    dist) flags=(-O3 -mcpu=apple-m1 -flto=full -DNDEBUG -fobjc-arc) ;;  # the oldest Apple silicon, so it runs on all of them
+    debug) flags=("${checked[@]}" -fobjc-arc) ;;
 esac
 readonly app="$out/C Editor.app"
 mkdir -p "$app/Contents/MacOS" "$app/Contents/Resources"
-"$cxx" "${common[@]}" "${flags[@]}" -fobjc-arc "${portable[@]}" src/platform/macos/*.mm \
-    -framework AppKit -framework CoreText -framework UniformTypeIdentifiers -o "$app/Contents/MacOS/c-editor"
+compile_link "$app/Contents/MacOS/c-editor" "${portable[@]}" src/platform/macos/*.mm -- \
+    -framework AppKit -framework CoreText -framework UniformTypeIdentifiers
 cp resources/Info.plist "$app/Contents/Info.plist"
 cp resources/CSource.icns "$app/Contents/Resources/CSource.icns"
 /usr/bin/ditto resources/compat "$app/Contents/Resources/compat"

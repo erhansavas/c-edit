@@ -4,6 +4,8 @@
 
 // One source file in one window: editing, saving in the file's own encoding, compile and run.
 // It is the window's delegate, so File/Format/Run menu actions reach it through the responder chain.
+extern NSString* const CEDocumentTabs;  // the tabbing identifier of every document window
+
 @interface CEDocumentWindow : NSObject <NSWindowDelegate>
 
 + (instancetype)untitled;
