@@ -2,7 +2,7 @@
   <img src="docs/assets/icon.png" width="128" height="128" alt="C Editor simgesi">
   <h1>C Editor</h1>
   <p><strong>Mac için sade ve hızlı C editörü. Kodunu yaz, ⌘R’ye bas, çalışsın.</strong></p>
-  <p>Sürüm 0.1 · macOS 27 · Apple silicon</p>
+  <p>Sürüm 0.2 · macOS 27 · Apple silicon</p>
 
   [![Sürüm](https://img.shields.io/github/v/release/erhansavas/c-editor?label=s%C3%BCr%C3%BCm)](https://github.com/erhansavas/c-editor/releases)
   [![Lisans](https://img.shields.io/badge/lisans-Apache--2.0-blue.svg)](LICENSE)
@@ -97,7 +97,7 @@ uygulanır.
 
 ## Kurulum
 
-1. [Sürümler](https://github.com/erhansavas/c-editor/releases) sayfasından `C-Editor-0.1-macOS-arm64.dmg`
+1. [Sürümler](https://github.com/erhansavas/c-editor/releases) sayfasından `C-Editor-0.2-macOS-arm64.dmg`
    dosyasını indirin.
 2. Açın ve **C Editor**’ü **Applications** (Uygulamalar) klasörüne sürükleyin.
 3. Uygulama Apple onaylı (notarize) olmadığı için macOS ilk açılışı engeller: **Sistem Ayarları › Gizlilik ve
@@ -105,7 +105,7 @@ uygulanır.
 4. Programları derlemek için Apple’ın ücretsiz Komut Satırı Araçları gerekir. Kurulu değilse ⌘R’ye ilk
    bastığınızda C Editor bunu söyler; **Kur**’a tıklamanız yeterli, Apple’ın kurulumu açılır.
 
-İndirdiğiniz dosyayı doğrulamak için: `shasum -a 256 -c C-Editor-0.1-macOS-arm64.dmg.sha256`
+İndirdiğiniz dosyayı doğrulamak için: `shasum -a 256 -c C-Editor-0.2-macOS-arm64.dmg.sha256`
 
 ## Kaynaktan derleme
 
