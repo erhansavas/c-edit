@@ -1,5 +1,11 @@
 # Değişiklikler
 
+## 0.4 — 24 Ekim 2026
+
+- Sağ üstteki ▶ düğmesi çerçevesiz, düz yeşil.
+- Çökme mesajı iki satır: ne olduğu ve nedeni; 80 sütunluk konsolda artık bölünmez.
+- README baştan yazıldı; yeni ekran görüntüleri: not programı, yazarken girinti, hatalar ve çökme.
+
 ## 0.3 — 24 Ekim 2026
 
 - Süslü parantezsiz `if`/`else`/`for`/`while`/`do` sonrası otomatik girinti, tek komutun ardından geri dönüş;

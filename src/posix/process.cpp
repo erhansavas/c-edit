@@ -58,12 +58,16 @@ std::string describe_exit(int wait_status, double seconds) {
     const std::string after = "Program " + duration_text(seconds);
     if (!WIFSIGNALED(wait_status))
         return after + " içinde bitti, çıkış kodu " + std::to_string(WEXITSTATUS(wait_status)) + ".";
+    // A crash takes two lines, what happened and why, so neither wraps in the 80-column console.
+    const auto crashed = [&](std::string_view name, std::string_view reason) {
+        return after + " sonra çöktü (" + std::string(name) + ").\r\n" + std::string(reason);
+    };
     switch (const int signal = WTERMSIG(wait_status)) {
-    case SIGSEGV: return after + " sonra çöktü: izin verilmeyen bir bellek alanına erişti (segmentation fault).";
-    case SIGBUS: return after + " sonra çöktü: izin verilmeyen bir bellek alanına erişti (bus error).";
-    case SIGFPE: return after + " sonra çöktü: aritmetik hata (floating-point exception).";
+    case SIGSEGV: return crashed("segmentation fault", "İzin verilmeyen bir bellek alanına erişti.");
+    case SIGBUS: return crashed("bus error", "İzin verilmeyen bir bellek alanına erişti.");
+    case SIGFPE: return crashed("floating-point exception", "Aritmetik bir hata oluştu.");
     case SIGILL:
-    case SIGTRAP: return after + " sonra çöktü: hiç çalışmaması gereken bir koda ulaştı (trap).";
+    case SIGTRAP: return crashed("trap", "Hiç çalışmaması gereken bir koda ulaştı.");
     case SIGABRT: return after + " sonra abort() ile kendini durdurdu, örneğin bir assert tuttu.";
     case SIGINT: return after + " sonra Control-C ile durduruldu.";
     case SIGKILL: return after + " sonra sonlandırıldı.";

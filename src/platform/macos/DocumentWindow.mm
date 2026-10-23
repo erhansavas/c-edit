@@ -194,9 +194,10 @@ NSString* const CEDocumentTabs = @"CEDocument";
 
     // Vector SF Symbol: stays sharp at every size and display scale.
     NSImage* playImage = [[NSImage imageWithSystemSymbolName:@"play.fill" accessibilityDescription:@"Derle ve Çalıştır"]
-        imageWithSymbolConfiguration:[NSImageSymbolConfiguration configurationWithScale:NSImageSymbolScaleMedium]];
+        imageWithSymbolConfiguration:[NSImageSymbolConfiguration configurationWithScale:NSImageSymbolScaleLarge]];
     _runButton = [NSButton buttonWithImage:playImage target:self action:@selector(run:)];
-    _runButton.bezelStyle = NSBezelStyleTexturedRounded;
+    _runButton.bordered = NO;  // a plain green triangle, no bezel or background
+    _runButton.contentTintColor = NSColor.systemGreenColor;
     _runButton.toolTip = @"Derle ve Çalıştır (⌘R veya F11)";
     NSTitlebarAccessoryViewController* accessory = [[NSTitlebarAccessoryViewController alloc] init];
     NSView* holder = [[NSView alloc] initWithFrame:NSMakeRect(0, 0, NSWidth(_runButton.frame) + 16, 28)];

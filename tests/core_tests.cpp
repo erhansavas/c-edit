@@ -455,7 +455,7 @@ void plain_words() {
     CHECK(cedit::duration_text(0.234) == "0,23 sn");
     CHECK(cedit::describe_exit(W_EXITCODE(3, 0), 1.25) == "Program 1,25 sn içinde bitti, çıkış kodu 3.");
     CHECK(cedit::describe_exit(W_EXITCODE(0, SIGSEGV), 0.5) ==
-          "Program 0,50 sn sonra çöktü: izin verilmeyen bir bellek alanına erişti (segmentation fault).");
+          "Program 0,50 sn sonra çöktü (segmentation fault).\r\nİzin verilmeyen bir bellek alanına erişti.");
     CHECK(cedit::describe_exit(W_EXITCODE(0, SIGINT), 2) == "Program 2,00 sn sonra Control-C ile durduruldu.");
     CHECK(cedit::describe_exit(W_EXITCODE(0, SIGTERM), 1) == "Program 1,00 sn sonra 15 numaralı sinyalle durduruldu.");
 }
