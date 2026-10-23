@@ -1,5 +1,14 @@
 # Değişiklikler
 
+## Yayımlanmamış
+
+- Süslü parantezsiz `if`/`else`/`for`/`while`/`do` sonrası otomatik girinti, tek komutun ardından geri dönüş;
+  kendi satırına yazılan `{` üstündeki `if`/`else` ile hizalanır.
+- Girinti düzeylerini gösteren soluk dikey çizgiler.
+- Metinlerdeki kaçış dizileri (`\n`, `\t`, `\"`, `\\`…) ayrı renkte; anahtar kelimeler metinlerden daha
+  kolay ayrılan bir renkte.
+- Açıklamalar düzeltmeyi uygulamaz, ne yazılması gerektiğini söyler (“;” yazılmalı.); tıklamak o yere götürür.
+
 ## 0.2 — 23 Ekim 2026
 
 - Program çıktısı ayrı pencere yerine kodun altındaki panelde; derleme mesajları paneli içeriğine göre boyutlanır.

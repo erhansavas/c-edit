@@ -19,6 +19,5 @@
 
 - (void)setDiagnostics:(std::vector<cedit::Diagnostic>)diagnostics;
 - (void)goToLine:(std::size_t)line column:(std::size_t)column;
-- (void)replaceFrom:(std::size_t)from to:(std::size_t)to with:(const std::string&)text;  // one undoable edit
 
 @end

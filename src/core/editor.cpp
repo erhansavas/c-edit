@@ -13,6 +13,49 @@ bool is_word(std::string_view text, std::size_t offset) {
     return (byte >= '0' && byte <= '9') || (byte >= 'a' && byte <= 'z') || (byte >= 'A' && byte <= 'Z') || byte == '_';
 }
 
+std::string_view trimmed(std::string_view text) {
+    const std::size_t first = text.find_first_not_of(" \t");
+    if (first == std::string_view::npos) return {};
+    return text.substr(first, text.find_last_not_of(" \t") + 1 - first);
+}
+
+bool starts_with_word(std::string_view text, std::string_view word) {
+    return text.starts_with(word) && (text.size() == word.size() || !is_word(text, word.size()));
+}
+
+// The line without a trailing // comment (outside quotes) and without surrounding blanks.
+std::string_view code_of(std::string_view line) {
+    char quote = 0;
+    for (std::size_t i = 0; i < line.size(); ++i) {
+        if (quote && line[i] == '\\') ++i;
+        else if (quote) quote = line[i] == quote ? 0 : quote;
+        else if (line[i] == '"' || line[i] == '\'') quote = line[i];
+        else if (line.substr(i, 2) == "//") return trimmed(line.substr(0, i));
+    }
+    return trimmed(line);
+}
+
+// "if (...)", "else if (...)", "for (...)", "while (...)", "else" or "do" with nothing after it,
+// also after a closing "}": a control line whose single statement goes on the next line.
+bool opens_statement(std::string_view line) {
+    line = code_of(line);
+    if (line.starts_with('}')) line = trimmed(line.substr(1));
+    if (line == "else" || line == "do") return true;
+    if (starts_with_word(line, "else")) line = trimmed(line.substr(4));
+    std::size_t keyword = 0;
+    for (const std::string_view word : {"if", "for", "while"})
+        if (starts_with_word(line, word)) keyword = word.size();
+    if (keyword == 0 || !line.ends_with(')') || !trimmed(line.substr(keyword)).starts_with('(')) return false;
+    std::size_t depth = 0;
+    for (std::size_t i = keyword; i < line.size(); ++i) {
+        if (line[i] == '(') ++depth;
+        if (line[i] == ')' && --depth == 0) return i + 1 == line.size();
+    }
+    return false;
+}
+
+bool opens_block(std::string_view line) { return code_of(line).ends_with('{') || opens_statement(line); }
+
 }  // namespace
 
 Editor::Editor(std::string text) : text_(std::move(text)) { rebuild_lines(); }
@@ -76,35 +119,90 @@ void Editor::replace(std::size_t from, std::size_t to, std::string_view with, bo
     has_preferred_column_ = false;
 }
 
+std::string_view Editor::indentation(std::size_t line) const {
+    const std::string_view text = this->line(line);
+    return text.substr(0, std::min(text.find_first_not_of(" \t"), text.size()));
+}
+
+std::size_t Editor::statement_header(std::size_t line) const {
+    while (line-- > 0)
+        if (!trimmed(this->line(line)).empty()) return opens_statement(this->line(line)) ? line : npos;
+    return npos;
+}
+
 void Editor::insert(std::string_view text) {
     const auto [from, to] = selection();
-    if (text == "}" && from == to) {
+    const std::size_t line = line_of(from);
+    const std::size_t start = starts_[line];
+    const bool blank_before = from == to && start + indentation(line).size() >= from;
+    if (text == "}" && blank_before) {
         // A closing brace typed on a blank line lines up with the line of its opening brace.
-        const std::size_t start = starts_[line_of(from)];
-        const std::size_t indent_end = std::min(text_.find_first_not_of(" \t", start), text_.size());
         std::size_t depth = 0;
-        for (std::size_t i = start; indent_end >= from && i-- > 0;) {
+        for (std::size_t i = start; i-- > 0;) {
             if (text_[i] == '}') ++depth;
             if (text_[i] != '{' || depth-- > 0) continue;
-            const std::size_t open = starts_[line_of(i)];
-            const std::string indent = text_.substr(open, text_.find_first_not_of(" \t", open) - open);
+            const std::string_view indent = indentation(line_of(i));
             if (indent == std::string_view(text_).substr(start, from - start)) break;
-            return replace(start, from, indent + "}", false);
+            return replace(start, from, std::string(indent) + "}", false);
         }
+    }
+    if (text == "{" && blank_before) {
+        // An opening brace on its own line under "if (...)" or "else" lines up with that line.
+        const std::size_t header = statement_header(line);
+        if (header != npos && indentation(header) != std::string_view(text_).substr(start, from - start))
+            return replace(start, from, std::string(indentation(header)) + "{", false);
     }
     replace(from, to, text, text.size() <= 4 && from == to);
 }
 
 void Editor::insert_newline() {
     const auto [from, to] = selection();
-    const std::size_t start = starts_[line_of(from)];
+    const std::size_t line = line_of(from);
+    const std::size_t start = starts_[line];
+    const std::string_view before = std::string_view(text_).substr(start, from - start);
+    const std::string_view code = code_of(before);
     std::string text = "\n";
-    for (std::size_t i = start; i < from && (text_[i] == ' ' || text_[i] == '\t'); ++i) text.push_back(text_[i]);
-    // After an opening brace the next line goes one level deeper.
-    std::size_t last = from;
-    while (last > start && (text_[last - 1] == ' ' || text_[last - 1] == '\t')) --last;
-    if (last > start && text_[last - 1] == '{') text.append(tab_width, ' ');
+    text += before.substr(0, std::min(before.find_first_not_of(" \t"), before.size()));
+    // One level deeper after '{' or a control line; after the single statement under a control
+    // line, back to the level of that line.
+    if (code.ends_with('{') || opens_statement(code)) {
+        text.append(tab_width, ' ');
+    } else if (code.ends_with(';')) {
+        const std::size_t header = statement_header(line);
+        if (header != npos && column_of(starts_[header] + indentation(header).size()) < column_of(start + text.size() - 1))
+            text = "\n" + std::string(indentation(header));
+    }
     replace(from, to, text, false);
+}
+
+std::vector<std::vector<std::size_t>> Editor::indent_guides() const {
+    std::vector<std::vector<std::size_t>> guides(starts_.size());
+    std::vector<std::size_t> own(starts_.size(), npos);  // indentation column, npos on a blank line
+    std::vector<std::size_t> open;                       // indentation of the enclosing block lines
+    for (std::size_t line = 0; line < starts_.size(); ++line) {
+        if (trimmed(this->line(line)).empty()) continue;
+        own[line] = column_of(starts_[line] + indentation(line).size());
+        while (!open.empty() && open.back() >= own[line]) open.pop_back();
+        for (const std::size_t column : open)
+            if (column > 0) guides[line].push_back(column);
+        if (opens_block(this->line(line))) open.push_back(own[line]);
+    }
+    // Blank lines, bottom up: each takes from the first non-blank line below it, up to the lesser
+    // indentation of the lines around it.
+    std::vector<std::size_t> above(starts_.size(), 0);
+    for (std::size_t line = 1; line < starts_.size(); ++line)
+        above[line] = own[line - 1] != npos ? own[line - 1] : above[line - 1];
+    std::size_t below = npos;
+    for (std::size_t line = starts_.size(); line-- > 0;) {
+        if (own[line] != npos) {
+            below = line;
+            continue;
+        }
+        if (below == npos) continue;
+        for (const std::size_t column : guides[below])
+            if (column < std::min(above[line], own[below])) guides[line].push_back(column);
+    }
+    return guides;
 }
 
 void Editor::insert_tab() {

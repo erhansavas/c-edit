@@ -144,8 +144,7 @@ std::string explain(std::string_view message, std::string_view source_line) {
     const std::string name = quoted(message);
     if (starts("expected ';'")) return "Noktalı virgül (;) eksik.";
     if (starts("use of undeclared identifier '")) {
-        if (has("did you mean '"))
-            return "“" + name + "” tanımlı değil. Bunu mu demek istediniz: “" + quoted(message, message.find("did you mean")) + "”?";
+        if (has("did you mean '")) return "“" + name + "” tanımlı değil.";  // the compiler's fix names the right one
         return "“" + name + "” tanımlı değil: kullanmadan önce tanımlayın (örneğin int " + name + ";) ya da yazımını kontrol edin.";
     }
     if (starts("call to undeclared function '") || starts("call to undeclared library function '"))

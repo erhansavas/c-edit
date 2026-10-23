@@ -146,8 +146,6 @@ NSString* const CEDocumentTabs = @"CEDocument";
     NSBox* _logDivider;
     NSBox* _consoleDivider;
     NSString* _workDir;  // compiler scratch folder of this document
-    std::vector<cedit::Diagnostic> _built;  // what the last build reported
-    std::uint64_t _builtRevision;           // the editor revision that build compiled
     BOOL _compiling;
     BOOL _closed;
 }
@@ -475,7 +473,6 @@ NSString* const CEDocumentTabs = @"CEDocument";
     NSString* compat = [NSBundle.mainBundle.resourcePath stringByAppendingPathComponent:@"compat"];
     const cedit::CompileRequest request{_path.fileSystemRepresentation, _editor->text(), compat.fileSystemRepresentation,
                                         _workDir.fileSystemRepresentation};
-    _builtRevision = _editor->revision();
     __weak CEDocumentWindow* weakSelf = self;
     dispatch_async(dispatch_get_global_queue(QOS_CLASS_USER_INITIATED, 0), ^{
         if (!cedit::developer_tools_installed()) {
@@ -509,7 +506,6 @@ NSString* const CEDocumentTabs = @"CEDocument";
     _runButton.enabled = YES;
     if (_closed) return;
     [self showLog:result.log];
-    _built = result.diagnostics;
     [_editorView setDiagnostics:result.diagnostics];
     if (!result.ok) {
         for (const cedit::Diagnostic& diagnostic : result.diagnostics)
@@ -543,26 +539,11 @@ NSString* const CEDocumentTabs = @"CEDocument";
     if (focused) [_window makeFirstResponder:_editorView];
 }
 
-// A message line jumps to its place. The explanation under it also applies the compiler's fix, while the
-// text is still the one that build saw.
+// A message line, or the explanation under it, jumps to its place; the text is left to the writer.
 - (void)clickedLogLine:(NSString*)line above:(NSString*)above {
     const bool hint = std::string_view(line.UTF8String).starts_with(cedit::hint_prefix);
     const auto parsed = cedit::parse_diagnostics((hint ? above : line).UTF8String, _path.lastPathComponent.fileSystemRepresentation);
-    if (parsed.empty()) return;
-    const cedit::Diagnostic& clicked = parsed.front();
-    if (hint && _editor->revision() == _builtRevision)
-        for (const cedit::Diagnostic& diagnostic : _built)
-            if (diagnostic.fix && diagnostic.line == clicked.line && diagnostic.column == clicked.column &&
-                diagnostic.message == clicked.message)
-                return [self applyFix:*diagnostic.fix];
-    [_editorView goToLine:clicked.line column:clicked.column];
-}
-
-- (void)applyFix:(const cedit::Fix&)fix {
-    if (fix.line >= _editor->line_count()) return;
-    const std::size_t start = _editor->line_start(fix.line);
-    const std::size_t end = _editor->line_end(fix.line);
-    [_editorView replaceFrom:std::min(start + fix.column, end) to:std::min(start + fix.end_column, end) with:fix.text];
+    if (!parsed.empty()) [_editorView goToLine:parsed.front().line column:parsed.front().column];
 }
 
 @end

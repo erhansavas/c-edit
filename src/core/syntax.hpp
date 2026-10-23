@@ -7,7 +7,7 @@
 
 namespace cedit {
 
-enum class Token : std::uint8_t { plain, keyword, type, preprocessor, string, character, comment, number };
+enum class Token : std::uint8_t { plain, keyword, type, preprocessor, string, character, escape, comment, number };
 
 struct Span {
     std::size_t begin;  // byte offsets within the line

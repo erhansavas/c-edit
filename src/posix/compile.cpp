@@ -50,13 +50,13 @@ std::string_view line_of(std::string_view text, std::size_t index) {
     return text.substr(start, text.find('\n', start) - start);
 }
 
-// What clicking a fix does, in words.
+// The compiler's sure correction, in words: what the line should say. The writer makes the change.
 std::string describe(const Fix& fix, std::string_view text) {
     const std::string_view line = line_of(text, fix.line);
     const std::string before(line.substr(std::min(fix.column, line.size()), fix.end_column - fix.column));
-    if (before.empty()) return "Tıklayınca “" + fix.text + "” eklenir.";
-    if (fix.text.empty()) return "Tıklayınca “" + before + "” silinir.";
-    return "Tıklayınca “" + before + "” yerine “" + fix.text + "” yazılır.";
+    if (before.empty()) return "“" + fix.text + "” yazılmalı.";
+    if (fix.text.empty()) return "“" + before + "” silinmeli.";
+    return "“" + before + "” yerine “" + fix.text + "” yazılmalı.";
 }
 
 // The compiler's output with a Turkish explanation under each message it recognises, without the

@@ -151,6 +151,60 @@ void editing() {
     lone.insert("}");
     CHECK(lone.text() == "     }");  // no opening brace: typed as is
 
+    cedit::Editor braceless("    if (sayi % 2 == 0)");
+    braceless.set_caret(braceless.text().size(), false);
+    braceless.insert_newline();
+    braceless.insert("a();");
+    braceless.insert_newline();
+    braceless.insert("else");
+    braceless.insert_newline();
+    braceless.insert("b();");
+    braceless.insert_newline();
+    braceless.insert("return 0;");
+    CHECK(braceless.text() == "    if (sayi % 2 == 0)\n        a();\n    else\n        b();\n    return 0;");
+    cedit::Editor allman("if (f(a))");
+    allman.set_caret(allman.text().size(), false);
+    allman.insert_newline();
+    allman.insert("{");
+    allman.insert_newline();
+    allman.insert("x;");
+    allman.insert_newline();
+    allman.insert("}");
+    CHECK(allman.text() == "if (f(a))\n{\n    x;\n}");  // the brace lines up with its "if"
+    CHECK(allman.undo() && allman.undo() && allman.text() == "if (f(a))\n{\n    x;");
+    cedit::Editor closed("    if (a) {\n        b;\n    } else");
+    closed.set_caret(closed.text().size(), false);
+    closed.insert_newline();
+    closed.insert("c;");
+    closed.insert_newline();
+    CHECK(closed.text() == "    if (a) {\n        b;\n    } else\n        c;\n    ");
+    cedit::Editor narrow("    if (a)\n     b;");  // a one-space statement indentation
+    narrow.set_caret(narrow.text().size(), false);
+    narrow.insert_newline();
+    CHECK(narrow.text() == "    if (a)\n     b;\n    ");
+    cedit::Editor plain("    if (a) b();\n    for (i = 0; i < 3; i++)");
+    plain.set_caret(plain.line_end(0), false);
+    plain.insert_newline();
+    CHECK(plain.line(1) == "    ");  // a statement on the same line opens nothing
+    plain.set_caret(plain.text().size(), false);
+    plain.insert_newline();
+    CHECK(plain.text().ends_with("i++)\n        "));
+
+    const cedit::Editor guides("int main() {\n    if (a) {\n        b;\n\n        c;\n    }\n\n    if (d)\n     e;\n\treturn 0;\n}");
+    const auto lines = guides.indent_guides();
+    using Columns = std::vector<std::size_t>;
+    CHECK(lines.size() == 11);
+    CHECK(lines[0].empty() && lines[1].empty());  // column 0 is the gutter's edge
+    CHECK(lines[2] == Columns{4} && lines[3] == Columns{4} && lines[4] == Columns{4});
+    CHECK(lines[5].empty() && lines[6].empty());  // the block is closed above the blank line
+    CHECK(lines[8] == Columns{4} && lines[9].empty() && lines[10].empty());  // a tab is 4 columns
+    const auto uneven = cedit::Editor("    int i;\n     for (;;) { // loop\n      x;\n     }").indent_guides();
+    CHECK(uneven[1].empty() && uneven[2] == Columns{5} && uneven[3].empty());  // only block lines open guides
+    cedit::Editor commented("    if (a) // yorum");
+    commented.set_caret(commented.text().size(), false);
+    commented.insert_newline();
+    CHECK(commented.text() == "    if (a) // yorum\n        ");
+
     cedit::Editor saved;
     saved.insert("a");
     saved.mark_saved();
@@ -166,8 +220,9 @@ void highlighting() {
     CHECK(state.in_comment && spans.size() == 3 && spans[0].token == cedit::Token::type &&
           spans[1].token == cedit::Token::number && spans[2].token == cedit::Token::comment);
     state = cedit::highlight_c("end */ return \"x\\\"y\";", state, spans);
-    CHECK(!state.in_comment && spans.size() == 3 && spans[0].end == 6 && spans[1].token == cedit::Token::keyword &&
-          spans[2].token == cedit::Token::string && spans[2].end == 20);
+    CHECK(!state.in_comment && spans.size() == 5 && spans[0].end == 6 && spans[1].token == cedit::Token::keyword &&
+          spans[2].token == cedit::Token::string && spans[3].token == cedit::Token::escape && spans[3].begin == 16 &&
+          spans[3].end == 18 && spans[4].token == cedit::Token::string && spans[4].end == 20);
     cedit::highlight_c("uint16_t x;", {}, spans);
     CHECK(spans.size() == 1 && spans[0].token == cedit::Token::type);
 
@@ -182,6 +237,17 @@ void highlighting() {
     CHECK(spans.size() == 2 && spans[0].token == cedit::Token::keyword);
     state = cedit::highlight_c("    printf(\"\\\\\");", {}, spans);
     CHECK(!state.in_line_comment);  // a backslash inside a string is not a comment's
+
+    // Each escape is one span: two characters, up to three octal digits, or \x and its hex digits.
+    cedit::highlight_c("\"a\\n\\101\\x1Fz\\ş\" '\\0'", {}, spans);
+    using T = cedit::Token;
+    const std::vector<std::pair<std::size_t, T>> pieces = {{2, T::string},  {4, T::escape},     {8, T::escape},
+                                                           {12, T::escape}, {13, T::string},    {16, T::escape},
+                                                           {17, T::string}, {19, T::character}, {21, T::escape},
+                                                           {22, T::character}};
+    CHECK(spans.size() == pieces.size());
+    for (std::size_t k = 0; k < std::min(spans.size(), pieces.size()); ++k)
+        CHECK(spans[k].end == pieces[k].first && spans[k].token == pieces[k].second);
 }
 
 void terminal() {
@@ -247,7 +313,7 @@ void diagnostics() {
 
     CHECK(cedit::explain("expected ';' after expression", "") == "Noktalı virgül (;) eksik.");
     CHECK(cedit::explain("use of undeclared identifier 'topalm'; did you mean 'toplam'?", "") ==
-          "“topalm” tanımlı değil. Bunu mu demek istediniz: “toplam”?");
+          "“topalm” tanımlı değil.");
     CHECK(cedit::explain("format specifies type 'int *' but the argument has type 'int'", "    scanf(\"%d\", a);") ==
           "scanf’te değişkenin önüne & koymayı unutmuşsunuz (örneğin &x).");
     CHECK(cedit::explain("format specifies type 'char *' but the argument has type 'int'", "    printf(\"%s\", c);")
@@ -406,9 +472,8 @@ void explains_mistakes() {
         CHECK(name && name->line == 3 && name->column == 17 && name->end_column == 23 && name->text == "toplam");
         CHECK(semicolon && semicolon->line == 3 && semicolon->column == 24 && semicolon->text == ";");
     }
-    CHECK(typo.log.find("  ➜ “topalm” tanımlı değil. Bunu mu demek istediniz: “toplam”? "
-                        "Tıklayınca “topalm” yerine “toplam” yazılır.\n") != std::string::npos);
-    CHECK(typo.log.find("  ➜ Noktalı virgül (;) eksik. Tıklayınca “;” eklenir.\n") != std::string::npos);
+    CHECK(typo.log.find("  ➜ “topalm” tanımlı değil. “topalm” yerine “toplam” yazılmalı.\n") != std::string::npos);
+    CHECK(typo.log.find("  ➜ Noktalı virgül (;) eksik. “;” yazılmalı.\n") != std::string::npos);
     CHECK(build("bos.c", "", false).log.find("  ➜ Programda main() fonksiyonu yok") != std::string::npos);
 }
 

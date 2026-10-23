@@ -43,13 +43,21 @@ void change_text_size(CGFloat delta) {
 }
 
 NSColor* token_color(Token token) {
+    // Xcode's keyword magenta: the system pink is within a few degrees of the red of strings.
+    static NSColor* const keyword = [NSColor colorWithName:nil dynamicProvider:^NSColor*(NSAppearance* appearance) {
+        const bool dark = [appearance bestMatchFromAppearancesWithNames:@[ NSAppearanceNameAqua, NSAppearanceNameDarkAqua ]] ==
+                          NSAppearanceNameDarkAqua;
+        return dark ? [NSColor colorWithSRGBRed:0xFC / 255.0 green:0x5F / 255.0 blue:0xA3 / 255.0 alpha:1]
+                    : [NSColor colorWithSRGBRed:0x9B / 255.0 green:0x23 / 255.0 blue:0x93 / 255.0 alpha:1];
+    }];
     switch (token) {
     case Token::plain: return NSColor.labelColor;
-    case Token::keyword: return NSColor.systemPinkColor;
+    case Token::keyword: return keyword;
     case Token::type: return NSColor.systemPurpleColor;
     case Token::preprocessor: return NSColor.systemOrangeColor;
     case Token::string: return NSColor.systemRedColor;
     case Token::character: return NSColor.systemRedColor;
+    case Token::escape: return NSColor.systemOrangeColor;
     case Token::comment: return NSColor.systemGreenColor;
     case Token::number: return NSColor.systemBlueColor;
     }

@@ -3,6 +3,8 @@
 #include <algorithm>
 #include <array>
 
+#include "utf8.hpp"
+
 namespace cedit {
 namespace {
 
@@ -19,6 +21,8 @@ constexpr std::array<std::string_view, 21> types = {
 
 constexpr bool identifier_start(char c) { return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || c == '_'; }
 constexpr bool identifier_part(char c) { return identifier_start(c) || (c >= '0' && c <= '9'); }
+constexpr bool octal_digit(char c) { return c >= '0' && c <= '7'; }
+constexpr bool hex_digit(char c) { return (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F'); }
 
 template <std::size_t N>
 constexpr bool contains(const std::array<std::string_view, N>& words, std::string_view word) {
@@ -81,10 +85,27 @@ LineState highlight_c(std::string_view line, LineState state, std::vector<Span>&
             continue;
         }
         if (c == '"' || c == '\'') {
+            // Escape sequences (\n, \t, \", \\, \0, \x41, ...) are spans of their own inside the literal.
+            const Token token = c == '"' ? Token::string : Token::character;
+            std::size_t piece = begin;
             ++i;
-            while (i < size && line[i] != c) i += line[i] == '\\' && i + 1 < size ? 2 : 1;
+            while (i < size && line[i] != c) {
+                if (line[i] != '\\' || i + 1 == size) {
+                    ++i;
+                    continue;
+                }
+                add(piece, i, token);
+                piece = i;
+                i = utf8::next(line, i + 1);
+                if (octal_digit(line[i - 1]))
+                    while (i < size && i - piece < 4 && octal_digit(line[i])) ++i;
+                else if (line[i - 1] == 'x')
+                    while (i < size && hex_digit(line[i])) ++i;
+                add(piece, i, Token::escape);
+                piece = i;
+            }
             i = std::min(i + 1, size);
-            add(begin, i, c == '"' ? Token::string : Token::character);
+            add(piece, i, token);
             continue;
         }
         if (c >= '0' && c <= '9') {

@@ -20,14 +20,17 @@ kod da Türkçe karakterleriyle birlikte olduğu gibi çalışır.
 
 - **Hızlı ve sade bir editör:** sözdizimi renklendirme, sekmeler (**⌘1**…**⌘8** ile sekme seçilir, **⌘9** son
   sekme, **⌘⇧T** kapatılan sekmeyi yeniden açar), trackpad ile yakınlaştırma.
-- **Yazarken düzen, ama dokunmadan:** `{` ile biten satırdan sonra yeni satır bir kademe içeriden başlar; boş
-  satıra yazılan `}` kendi `{` satırıyla hizalanır. Yazdığınız başka hiçbir şey değiştirilmez. `\` ile biten bir
-  `//` yorumu, C’de olduğu gibi alt satırı da yoruma katar; editör o satırı da yorum renginde gösterir.
+- **Yazarken düzen, ama dokunmadan:** `{` ile ya da süslü parantezsiz `if (...)`, `else`, `for (...)`,
+  `while (...)`, `do` ile biten satırdan sonra yeni satır bir kademe içeriden başlar; o tek komutun ardından
+  geri döner. Boş satıra yazılan `}` kendi `{` satırıyla, `{` ise üstündeki `if`/`else` ile hizalanır. Soluk
+  dikey çizgiler girinti düzeylerini gösterir; metin içindeki kaçış dizileri (`\n`, `\t`, `\"`, `\\`) ayrı
+  renktedir. Yazdığınız başka hiçbir şey değiştirilmez, hiçbir şey önerilmez. `\` ile biten bir `//` yorumu,
+  C’de olduğu gibi alt satırı da yoruma katar; editör o satırı da yorum renginde gösterir.
 - **Tek tuşla derle ve çalıştır:** **⌘R**, **F11** ya da ▶︎ düğmesi. Hatalar editörün altında listelenir ve
   satırlarında işaretlenir; birine tıklayınca o satıra gidilir.
 - **Hatalarda Türkçe yardım:** sık yapılan hatalar Türkçe açıklanır: eksik noktalı virgül, scanf’te unutulan &,
-  koşulda == yerine =, tanımsız değişken… Derleyicinin emin olduğu düzeltmeler tek tıkla uygulanır, ⌘Z ile
-  geri alınır. [Örneğe bakın](#hata-yapınca).
+  koşulda == yerine =, tanımsız değişken… Derleyici düzeltmeden eminse açıklama satırın tam olarak ne
+  olması gerektiğini söyler; düzeltmeyi siz yaparsınız, editör sizin yerinize yazmaz. [Örneğe bakın](#hata-yapınca).
 - **Anlaşılır mesajlar:** “Derleme başarılı (0,08 sn): hata yok, uyarı yok.” Program bitince çıkış kodunu,
   çökerse nedenini söyler; örneğin izin verilmeyen bir bellek alanına eriştiğini.
 - **Kodun altında bir konsol:** program pencerenin altındaki panelde çalışır; panel çıktı arttıkça 80×25’e
@@ -75,8 +78,9 @@ Paneli kapatmak için bir tuşa basın.
 ## Hata yapınca
 
 Aynı programda iki tipik hata: bir satırda noktalı virgül unutulmuş, diğerinde scanf’te `&` eksik. Hatalı
-satırlar işaretlenir; editörün altındaki listede her mesajın altında Türkçe açıklaması çıkar. Mavi açıklamaya
-tıklayınca derleyicinin önerdiği düzeltme uygulanır.
+satırlar işaretlenir ve imleç ilk hataya gider; editörün altındaki listede her mesajın altında Türkçe
+açıklaması çıkar, örneğin “Noktalı virgül (;) eksik. “;” yazılmalı.” Bir mesaja ya da açıklamasına tıklayınca
+o yere gidilir.
 
 <p align="center">
   <img src="docs/screenshots/hatalar.png" width="760" alt="C Editor’de iki hata ve altlarında Türkçe açıklamaları">

@@ -44,6 +44,7 @@ std::size_t utf8_length(std::string_view text, NSUInteger units) {
 @implementation CEEditorView {
     cedit::Editor _editor;
     std::vector<cedit::LineState> _states;  // highlight state at the start of each line
+    std::vector<std::vector<std::size_t>> _guides;  // indentation guide columns of each line
     std::uint64_t _statesRevision;
     std::uint64_t _seenRevision;  // text revision the size, diagnostics and owner last saw
     std::vector<cedit::Diagnostic> _diagnostics;
@@ -204,6 +205,7 @@ std::size_t utf8_length(std::string_view text, NSUInteger units) {
         _states[line] = state;
         state = cedit::highlight_c(_editor.line(line), state, scratch);
     }
+    _guides = _editor.indent_guides();
     _statesRevision = _editor.revision();
 }
 
@@ -226,6 +228,7 @@ std::size_t utf8_length(std::string_view text, NSUInteger units) {
     [NSColor.windowBackgroundColor setFill];
     NSRectFill(NSMakeRect(NSMinX(dirty), NSMinY(dirty), std::max<CGFloat>(0, gutter - NSMinX(dirty)), NSHeight(dirty)));
 
+    const CGFloat hairline = [self convertSizeFromBacking:NSMakeSize(1, 1)].width;
     std::vector<cedit::Span> spans;
     for (std::size_t line = first; line < last; ++line) {
         const CGFloat y = vertical_inset + static_cast<CGFloat>(line) * metrics.line_height;
@@ -242,6 +245,10 @@ std::size_t utf8_length(std::string_view text, NSUInteger units) {
             [rowColor setFill];
             NSRectFillUsingOperation(row, NSCompositingOperationSourceOver);
         }
+        [[NSColor.labelColor colorWithAlphaComponent:0.14] setFill];
+        for (const std::size_t column : _guides[line])
+            NSRectFillUsingOperation(NSMakeRect(left + static_cast<CGFloat>(column) * metrics.advance, y, hairline, metrics.line_height),
+                                     NSCompositingOperationSourceOver);
 
         const std::size_t start = _editor.line_start(line);
         const std::size_t end = _editor.line_end(line);
@@ -304,14 +311,6 @@ std::size_t utf8_length(std::string_view text, NSUInteger units) {
 - (void)goToLine:(std::size_t)line column:(std::size_t)column {
     line = std::min(line, _editor.line_count() - 1);
     _editor.set_caret(std::min(_editor.line_start(line) + column, _editor.line_end(line)), false);
-    [self.window makeFirstResponder:self];
-    [self update];
-}
-
-- (void)replaceFrom:(std::size_t)from to:(std::size_t)to with:(const std::string&)text {
-    _editor.set_caret(from, false);
-    _editor.set_caret(to, true);
-    _editor.insert(text);
     [self.window makeFirstResponder:self];
     [self update];
 }

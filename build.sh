@@ -58,8 +58,9 @@ compile_link "$app/Contents/MacOS/c-editor" "${portable[@]}" src/platform/macos/
 cp resources/Info.plist "$app/Contents/Info.plist"
 cp resources/CSource.icns "$app/Contents/Resources/CSource.icns"
 /usr/bin/ditto resources/compat "$app/Contents/Resources/compat"
-/usr/bin/xcrun actool resources/AppIcon.icon --compile "$app/Contents/Resources" --platform macosx \
-    --minimum-deployment-target 27.0 --app-icon AppIcon --output-partial-info-plist "$out/icon-info.plist" >/dev/null
+# Absolute paths: actool hands the work to a helper that may still sit in another project's folder.
+/usr/bin/xcrun actool "$PWD/resources/AppIcon.icon" --compile "$PWD/$app/Contents/Resources" --platform macosx \
+    --minimum-deployment-target 27.0 --app-icon AppIcon --output-partial-info-plist "$PWD/$out/icon-info.plist" >/dev/null
 /usr/bin/codesign --force --sign - --timestamp=none "$app"
 print -- "built $app"
 

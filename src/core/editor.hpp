@@ -41,9 +41,11 @@ public:
     std::uint64_t revision() const { return revision_; }
 
     // Replaces the selection; consecutive typing undoes as one step. A "}" typed on a blank line
-    // lines up with its opening brace.
+    // lines up with its opening brace, a "{" with the "if (...)" or "else" above it.
     void insert(std::string_view text);
-    void insert_newline();  // keeps the indentation in front of the caret, one level deeper after '{'
+    // Keeps the indentation in front of the caret: one level deeper after '{' or a control line
+    // ("if (...)", "else", ...), back to that line's level after its single statement.
+    void insert_newline();
     void insert_tab();
     void delete_backward();
     void delete_forward();
@@ -60,7 +62,14 @@ public:
     std::size_t column_of(std::size_t offset) const;
     std::size_t offset_at(std::size_t line, std::size_t column) const;
 
+    // Per line, the columns of its indentation guides: the indentation of each enclosing line that
+    // opens a block ('{', "if (...)", "else", ...), column 0 left out. A blank line carries the guides
+    // its neighbours share.
+    std::vector<std::vector<std::size_t>> indent_guides() const;
+
 private:
+    static constexpr std::size_t npos = std::string_view::npos;
+
     struct Edit {
         std::size_t position;
         std::string removed;
@@ -72,6 +81,8 @@ private:
     void replace(std::size_t from, std::size_t to, std::string_view with, bool typing);
     void apply(std::size_t position, std::size_t remove_length, std::string_view with);
     void rebuild_lines();
+    std::string_view indentation(std::size_t line) const;
+    std::size_t statement_header(std::size_t line) const;  // the control line above, if any
     std::size_t clamp_boundary(std::size_t offset) const;
     std::size_t word_left(std::size_t offset) const;
     std::size_t word_right(std::size_t offset) const;
