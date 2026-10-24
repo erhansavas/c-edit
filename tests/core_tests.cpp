@@ -200,6 +200,17 @@ void editing() {
     CHECK(lines[8] == Columns{4} && lines[9].empty() && lines[10].empty());  // a tab is 4 columns
     const auto uneven = cedit::Editor("    int i;\n     for (;;) { // loop\n      x;\n     }").indent_guides();
     CHECK(uneven[1].empty() && uneven[2] == Columns{5} && uneven[3].empty());  // only block lines open guides
+    cedit::Editor quoted("if (c == ')')\n    a;\nwhile (c != '(')");  // parentheses in quotes do not count
+    quoted.set_caret(quoted.line_end(0), false);
+    quoted.insert_newline();
+    CHECK(quoted.line(1) == "    ");
+    quoted.set_caret(quoted.text().size(), false);
+    quoted.insert_newline();
+    CHECK(quoted.text().ends_with("'(')\n    "));
+    cedit::Editor literal("int main() {\n    printf(\"{\"); // {\n    ");  // nor braces in quotes or comments
+    literal.set_caret(literal.text().size(), false);
+    literal.insert("}");
+    CHECK(literal.text().ends_with("(\"{\"); // {\n}"));
     cedit::Editor commented("    if (a) // yorum");
     commented.set_caret(commented.text().size(), false);
     commented.insert_newline();

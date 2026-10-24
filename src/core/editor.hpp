@@ -83,6 +83,9 @@ private:
     void rebuild_lines();
     std::string_view indentation(std::size_t line) const;
     std::size_t statement_header(std::size_t line) const;  // the control line above, if any
+    // The line of the '{' a '}' at the start of `line` closes, if any; braces in quotes or // comments
+    // (printf("{")) do not count.
+    std::size_t opening_line(std::size_t line) const;
     std::size_t clamp_boundary(std::size_t offset) const;
     std::size_t word_left(std::size_t offset) const;
     std::size_t word_right(std::size_t offset) const;

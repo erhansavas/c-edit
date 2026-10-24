@@ -1,5 +1,12 @@
 # Değişiklikler
 
+## 0.5 — 24 Ekim 2026
+
+- Koşulunda tırnak içinde parantez olan `if`/`while` satırları da (örneğin `if (c == ')')`) Enter’dan sonra
+  girintilenir.
+- Boş satıra yazılan `}`, tırnak içindeki ya da yorumdaki süslü parantezlere (örneğin `printf("{")`) değil,
+  kendi `{` satırına hizalanır.
+
 ## 0.4 — 24 Ekim 2026
 
 - Sağ üstteki ▶ düğmesi çerçevesiz, düz yeşil.

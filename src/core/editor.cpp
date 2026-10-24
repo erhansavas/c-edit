@@ -23,17 +23,23 @@ bool starts_with_word(std::string_view text, std::string_view word) {
     return text.starts_with(word) && (text.size() == word.size() || !is_word(text, word.size()));
 }
 
-// The line without a trailing // comment (outside quotes) and without surrounding blanks.
-std::string_view code_of(std::string_view line) {
+// Visits the offset of each byte of `line` that is code: outside "..." and '...' and before a //
+// comment. Returns where that comment starts, or the line's size.
+template <typename Visit>
+std::size_t scan_code(std::string_view line, Visit visit) {
     char quote = 0;
     for (std::size_t i = 0; i < line.size(); ++i) {
         if (quote && line[i] == '\\') ++i;
         else if (quote) quote = line[i] == quote ? 0 : quote;
         else if (line[i] == '"' || line[i] == '\'') quote = line[i];
-        else if (line.substr(i, 2) == "//") return trimmed(line.substr(0, i));
+        else if (line.substr(i, 2) == "//") return i;
+        else visit(i);
     }
-    return trimmed(line);
+    return line.size();
 }
+
+// The line without a trailing // comment (outside quotes) and without surrounding blanks.
+std::string_view code_of(std::string_view line) { return trimmed(line.substr(0, scan_code(line, [](std::size_t) {}))); }
 
 // "if (...)", "else if (...)", "for (...)", "while (...)", "else" or "do" with nothing after it,
 // also after a closing "}": a control line whose single statement goes on the next line.
@@ -46,12 +52,15 @@ bool opens_statement(std::string_view line) {
     for (const std::string_view word : {"if", "for", "while"})
         if (starts_with_word(line, word)) keyword = word.size();
     if (keyword == 0 || !line.ends_with(')') || !trimmed(line.substr(keyword)).starts_with('(')) return false;
+    // The condition's ')' must end the line; parentheses in quotes, as in ')', do not count.
     std::size_t depth = 0;
-    for (std::size_t i = keyword; i < line.size(); ++i) {
+    std::size_t close = std::string_view::npos;
+    scan_code(line, [&](std::size_t i) {
+        if (i < keyword || close != std::string_view::npos) return;
         if (line[i] == '(') ++depth;
-        if (line[i] == ')' && --depth == 0) return i + 1 == line.size();
-    }
-    return false;
+        if (line[i] == ')' && --depth == 0) close = i;
+    });
+    return close != std::string_view::npos && close + 1 == line.size();
 }
 
 bool opens_block(std::string_view line) { return code_of(line).ends_with('{') || opens_statement(line); }
@@ -130,6 +139,22 @@ std::size_t Editor::statement_header(std::size_t line) const {
     return npos;
 }
 
+std::size_t Editor::opening_line(std::size_t line) const {
+    std::size_t depth = 0;
+    std::string braces;
+    for (std::size_t above = line; above-- > 0;) {
+        const std::string_view text = this->line(above);
+        braces.clear();
+        scan_code(text, [&](std::size_t i) {
+            if (text[i] == '{' || text[i] == '}') braces.push_back(text[i]);
+        });
+        for (auto brace = braces.rbegin(); brace != braces.rend(); ++brace)
+            if (*brace == '}') ++depth;
+            else if (depth-- == 0) return above;
+    }
+    return npos;
+}
+
 void Editor::insert(std::string_view text) {
     const auto [from, to] = selection();
     const std::size_t line = line_of(from);
@@ -137,14 +162,9 @@ void Editor::insert(std::string_view text) {
     const bool blank_before = from == to && start + indentation(line).size() >= from;
     if (text == "}" && blank_before) {
         // A closing brace typed on a blank line lines up with the line of its opening brace.
-        std::size_t depth = 0;
-        for (std::size_t i = start; i-- > 0;) {
-            if (text_[i] == '}') ++depth;
-            if (text_[i] != '{' || depth-- > 0) continue;
-            const std::string_view indent = indentation(line_of(i));
-            if (indent == std::string_view(text_).substr(start, from - start)) break;
-            return replace(start, from, std::string(indent) + "}", false);
-        }
+        const std::size_t opening = opening_line(line);
+        if (opening != npos && indentation(opening) != std::string_view(text_).substr(start, from - start))
+            return replace(start, from, std::string(indentation(opening)) + "}", false);
     }
     if (text == "{" && blank_before) {
         // An opening brace on its own line under "if (...)" or "else" lines up with that line.
