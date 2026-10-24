@@ -44,9 +44,12 @@ public:
     // lines up with its opening brace, a "{" with the "if (...)" or "else" above it.
     void insert(std::string_view text);
     // Keeps the indentation in front of the caret: one level deeper after '{' or a control line
-    // ("if (...)", "else", ...), back to that line's level after its single statement.
+    // ("if (...)", "else", ...), back to that line's level after its single statement. A '}' after
+    // the caret goes to its own line, lined up with its '{'.
     void insert_newline();
     void insert_tab();
+    // In the indentation, removes spaces back to the previous indentation level. A blank line that
+    // Backspace or Delete removes takes its spaces with it.
     void delete_backward();
     void delete_forward();
     void delete_to_line_start();
@@ -83,9 +86,9 @@ private:
     void rebuild_lines();
     std::string_view indentation(std::size_t line) const;
     std::size_t statement_header(std::size_t line) const;  // the control line above, if any
-    // The line of the '{' a '}' at the start of `line` closes, if any; braces in quotes or // comments
+    // The line of the '{' that a '}' at `offset` closes, if any; braces in quotes or // comments
     // (printf("{")) do not count.
-    std::size_t opening_line(std::size_t line) const;
+    std::size_t opening_line(std::size_t offset) const;
     std::size_t clamp_boundary(std::size_t offset) const;
     std::size_t word_left(std::size_t offset) const;
     std::size_t word_right(std::size_t offset) const;

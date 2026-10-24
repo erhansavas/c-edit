@@ -142,6 +142,57 @@ void editing() {
     CHECK(block.text().ends_with("    }\n}"));
     block.insert("}");
     CHECK(block.text().ends_with("    }\n}}"));  // after other text a brace is just typed
+    cedit::Editor pair("int main() {}");  // Enter between "{" and "}"
+    pair.set_caret(pair.text().size() - 1, false);
+    pair.insert_newline();
+    CHECK(pair.text() == "int main() {\n    \n}" && pair.caret() == 17);
+    cedit::Editor tail("int main() {\n    return 0;}");  // Enter in front of a '}' after other text
+    tail.set_caret(tail.text().size() - 1, false);
+    tail.insert_newline();
+    CHECK(tail.text() == "int main() {\n    return 0;\n}");
+    CHECK(tail.undo() && tail.text() == "int main() {\n    return 0;}");
+    cedit::Editor nested("    if (a) {  }");
+    nested.set_caret(12, false);
+    nested.insert_newline();
+    CHECK(nested.text() == "    if (a) {\n        \n    }");  // the blanks before '}' go
+    cedit::Editor string_pair("    printf(\"{}\");");  // braces in quotes are text: Enter just splits
+    string_pair.set_caret(13, false);
+    string_pair.insert_newline();
+    CHECK(string_pair.text() == "    printf(\"{\n    }\");");
+    cedit::Editor stray("int main() {}\n    x;}");  // a '}' without its '{' is left where it is
+    stray.set_caret(stray.text().size() - 1, false);
+    stray.insert_newline();
+    CHECK(stray.text() == "int main() {}\n    x;\n    }");
+    cedit::Editor back("int main() {\n        x;\n     ");
+    back.set_caret(back.line_start(1) + 8, false);
+    back.delete_backward();
+    CHECK(back.line(1) == "    x;");  // one level of indentation per Backspace
+    back.delete_backward();
+    CHECK(back.line(1) == "x;");
+    back.delete_backward();
+    CHECK(back.line(0) == "int main() {x;");  // at column 0 it joins the lines as before
+    back.set_caret(back.text().size(), false);
+    back.delete_backward();
+    CHECK(back.line(1) == "    ");  // from the class's five spaces back to the level at four
+    cedit::Editor gap("int main() {\n    x;\n    \n}");  // Backspace in front of '}' removes the blank line
+    gap.set_caret(gap.line_start(3), false);
+    gap.delete_backward();
+    CHECK(gap.text() == "int main() {\n    x;\n}");  // its spaces go too, so '}' stays in line
+    CHECK(gap.undo() && gap.text() == "int main() {\n    x;\n    \n}" && gap.caret() == gap.line_start(3));
+    gap.set_caret(gap.line_end(2), false);
+    gap.delete_forward();  // the same with Delete at the end of the blank line
+    CHECK(gap.text() == "int main() {\n    x;\n}");
+    gap.set_caret(gap.line_start(2), false);
+    gap.delete_to_line_start();  // and with ⌘⌫ at the start of a line
+    CHECK(gap.text() == "int main() {\n    x;}");
+    cedit::Editor inside("    x = 1;  ");
+    inside.set_caret(inside.text().size(), false);
+    inside.delete_backward();
+    CHECK(inside.text() == "    x = 1; ");  // after text, one space at a time
+    cedit::Editor tabbed("\t\tx");
+    tabbed.set_caret(2, false);
+    tabbed.delete_backward();
+    CHECK(tabbed.text() == "\tx");  // a tab is a level of its own
     cedit::Editor odd("    if (a) {\n     b;\n     ");  // the class's own five-space indentation
     odd.set_caret(odd.text().size(), false);
     odd.insert("}");

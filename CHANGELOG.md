@@ -1,5 +1,14 @@
 # Değişiklikler
 
+## 0.5.1 — 24 Ekim 2026
+
+- `}` işaretinin önünde Enter’a basınca `}` kendi `{` satırıyla hizalı olarak yeni satıra geçer; `{}` arasında
+  Enter’a basınca imleç aradaki girintili satıra gelir. Önceden `}` yeni satırın girintisinde kalıyordu.
+- Girintide Backspace bir kademe (4 boşluk) birden siler.
+- Backspace ya da Delete ile silinen boş satır boşluklarını da götürür; alttaki satır, örneğin `}`, kendi
+  hizasında kalır.
+- README sadeleşti: üç ekran görüntüsü, hepsi koyu temada; sürüm rozeti GitHub’daki son sürümü gösterir.
+
 ## 0.5 — 24 Ekim 2026
 
 - Koşulunda tırnak içinde parantez olan `if`/`while` satırları da (örneğin `if (c == ')')`) Enter’dan sonra

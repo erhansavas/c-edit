@@ -63,7 +63,23 @@ bool opens_statement(std::string_view line) {
     return close != std::string_view::npos && close + 1 == line.size();
 }
 
-bool opens_block(std::string_view line) { return code_of(line).ends_with('{') || opens_statement(line); }
+// Whether the line's code ends with '{'; one in quotes, as in printf("{, does not count.
+bool ends_with_brace(std::string_view line) {
+    std::size_t last = std::string_view::npos;
+    scan_code(line, [&](std::size_t i) {
+        if (line[i] != ' ' && line[i] != '\t') last = i;
+    });
+    return last != std::string_view::npos && line[last] == '{';
+}
+
+// Whether the byte at `offset` of `line` is code, not inside quotes or a // comment.
+bool is_code(std::string_view line, std::size_t offset) {
+    bool code = false;
+    scan_code(line, [&](std::size_t i) { code = code || i == offset; });
+    return code;
+}
+
+bool opens_block(std::string_view line) { return ends_with_brace(line) || opens_statement(line); }
 
 }  // namespace
 
@@ -139,11 +155,11 @@ std::size_t Editor::statement_header(std::size_t line) const {
     return npos;
 }
 
-std::size_t Editor::opening_line(std::size_t line) const {
+std::size_t Editor::opening_line(std::size_t offset) const {
     std::size_t depth = 0;
     std::string braces;
-    for (std::size_t above = line; above-- > 0;) {
-        const std::string_view text = this->line(above);
+    for (std::size_t above = line_of(offset) + 1; above-- > 0;) {
+        const std::string_view text = this->line(above).substr(0, offset - starts_[above]);
         braces.clear();
         scan_code(text, [&](std::size_t i) {
             if (text[i] == '{' || text[i] == '}') braces.push_back(text[i]);
@@ -162,7 +178,7 @@ void Editor::insert(std::string_view text) {
     const bool blank_before = from == to && start + indentation(line).size() >= from;
     if (text == "}" && blank_before) {
         // A closing brace typed on a blank line lines up with the line of its opening brace.
-        const std::size_t opening = opening_line(line);
+        const std::size_t opening = opening_line(from);
         if (opening != npos && indentation(opening) != std::string_view(text_).substr(start, from - start))
             return replace(start, from, std::string(indentation(opening)) + "}", false);
     }
@@ -181,16 +197,32 @@ void Editor::insert_newline() {
     const std::size_t start = starts_[line];
     const std::string_view before = std::string_view(text_).substr(start, from - start);
     const std::string_view code = code_of(before);
+    const bool brace = ends_with_brace(before);
     std::string text = "\n";
     text += before.substr(0, std::min(before.find_first_not_of(" \t"), before.size()));
     // One level deeper after '{' or a control line; after the single statement under a control
     // line, back to the level of that line.
-    if (code.ends_with('{') || opens_statement(code)) {
+    if (brace || opens_statement(code)) {
         text.append(tab_width, ' ');
     } else if (code.ends_with(';')) {
         const std::size_t header = statement_header(line);
         if (header != npos && column_of(starts_[header] + indentation(header).size()) < column_of(start + text.size() - 1))
             text = "\n" + std::string(indentation(header));
+    }
+    // A '}' after the caret goes to a line of its own, lined up with its '{'; between "{" and "}"
+    // the caret gets the indented line in the middle.
+    const std::size_t to_line = line_of(to);
+    std::size_t after = to;
+    while (after < line_end(to_line) && (text_[after] == ' ' || text_[after] == '\t')) ++after;
+    if (after < line_end(to_line) && text_[after] == '}' && is_code(this->line(to_line), after - starts_[to_line])) {
+        const std::size_t opening = opening_line(after);
+        if (opening != npos) {
+            const std::string closing = "\n" + std::string(indentation(opening));
+            if (!brace) return replace(from, after, closing, false);
+            replace(from, after, text + closing, false);
+            caret_ = anchor_ = from + text.size();
+            return;
+        }
     }
     replace(from, to, text, false);
 }
@@ -235,7 +267,17 @@ void Editor::delete_backward() {
         const auto [from, to] = selection();
         replace(from, to, {}, false);
     } else if (caret_ > 0) {
-        replace(utf8::prev(text_, caret_), caret_, {}, false);
+        const std::size_t line = line_of(caret_);
+        const std::size_t start = starts_[line];
+        std::size_t from = utf8::prev(text_, caret_);
+        if (caret_ == start && trimmed(this->line(line - 1)).empty()) {
+            from = starts_[line - 1];  // a blank line goes with its spaces, so this line keeps its own indentation
+        } else if (start + indentation(line).size() >= caret_ && text_[caret_ - 1] == ' ') {
+            // In the indentation, spaces go back one level at a time: to the previous multiple of tab_width.
+            from = caret_;
+            for (std::size_t count = (column_of(caret_) - 1) % tab_width + 1; count > 0 && text_[from - 1] == ' '; --count) --from;
+        }
+        replace(from, caret_, {}, false);
     }
 }
 
@@ -244,14 +286,18 @@ void Editor::delete_forward() {
         const auto [from, to] = selection();
         replace(from, to, {}, false);
     } else if (caret_ < text_.size()) {
+        // At the end of a blank line the line goes with its spaces, so the next line keeps its own indentation.
+        const std::size_t line = line_of(caret_);
+        if (caret_ == line_end(line) && trimmed(this->line(line)).empty())
+            return replace(starts_[line], caret_ + 1, {}, false);
         replace(caret_, utf8::next(text_, caret_), {}, false);
     }
 }
 
 void Editor::delete_to_line_start() {
-    if (has_selection()) return delete_backward();
     const std::size_t start = starts_[line_of(caret_)];
-    replace(start == caret_ && caret_ > 0 ? caret_ - 1 : start, caret_, {}, false);
+    if (has_selection() || start == caret_) return delete_backward();
+    replace(start, caret_, {}, false);
 }
 
 bool Editor::undo() {
