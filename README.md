@@ -3,7 +3,7 @@
   <h1>C Editor</h1>
   <p><strong>Mac için sade ve hızlı C editörü. Kodunu yaz, ⌘R’ye bas, çalışsın.</strong></p>
 
-  [![Sürüm](https://img.shields.io/github/v/release/erhansavas/c-editor?label=s%C3%BCr%C3%BCm)](https://github.com/erhansavas/c-editor/releases/latest)
+  [![Sürüm](https://img.shields.io/github/v/release/erhansavas/c-editor?include_prereleases&label=s%C3%BCr%C3%BCm)](https://github.com/erhansavas/c-editor/releases)
   [![Platform](https://img.shields.io/badge/macOS_27-Apple_silicon-black?logo=apple)](#kurulum)
   [![Lisans](https://img.shields.io/badge/lisans-Apache--2.0-blue.svg)](LICENSE)
 </div>
@@ -73,7 +73,9 @@ eksik `}`, unutulmuş `#include` gibi sık hatalar da Türkçe açıklanır.
 
 ## Kurulum
 
-1. [Sürümler](https://github.com/erhansavas/c-editor/releases/latest) sayfasından
+C Editor beta aşamasındadır: günlük kullanıma hazırdır, ama 1.0’a kadar davranışı değişebilir.
+
+1. [Sürümler](https://github.com/erhansavas/c-editor/releases) sayfasından
    `C-Editor-0.5.1-macOS-arm64.dmg` dosyasını indirin, açın ve **C Editor**’ü **Applications** (Uygulamalar)
    klasörüne sürükleyin.
 2. Uygulama Apple onaylı (notarize) olmadığı için macOS ilk açılışı engeller: **Sistem Ayarları › Gizlilik ve
